@@ -72,7 +72,7 @@ def check_first_round(teams, matches, size):
         if low <= n:
             assert (m["away"], m["away_seed"], m["bye"], m["winner"]) == (teams[low - 1], low, False, None)
         else:
-            assert (m["away"], m["away_seed"], m["bye"], m["winner"], m["loser"]) == (None, None, True, teams[high - 1], None)
+            assert (m["away"], m["away_seed"], m["bye"], m["winner"], m["loser"]) == (None, low, True, teams[high - 1], None)
 
 
 def test_helpers():
@@ -89,6 +89,7 @@ def test_single_spec_example(client):
     r1 = body["rounds"][0]["matches"]
     assert [(m["home"], m["away"], m["bye"]) for m in r1] == [("t1", None, True), ("t4", "t5", False),
                                                               ("t2", None, True), ("t3", "t6", False)]
+    assert [(m["home_seed"], m["away_seed"]) for m in r1] == [(1, 8), (4, 5), (2, 7), (3, 6)]
     assert r1[1] == {"match_id": "R1M2", "bracket": "main", "round": 1, "index": 2, "home": "t4", "away": "t5",
                      "home_seed": 4, "away_seed": 5, "bye": False, "winner": "t4", "loser": "t5",
                      "winner_to": {"match_id": "R2M1", "slot": "away"}, "loser_to": None}
@@ -236,8 +237,10 @@ def test_double_full_simulation(client, n, reset):
     if reset:
         gf2 = matches["GF2"]
         assert gf2["conditional"] is True and gf2["required"] is lb_champion_won
+        assert [gf2[k] for k in ("home", "away", "home_seed", "away_seed")] == \
+               [gf1[k] for k in ("home", "away", "home_seed", "away_seed")]
         if lb_champion_won:
-            assert (gf2["home"], gf2["away"]) == (gf1["home"], gf1["away"]) and gf2["winner"] in (gf1["home"], gf1["away"])
+            assert gf2["winner"] in (gf1["home"], gf1["away"])
             champion = gf2["winner"]
         else:
             assert gf2["winner"] is None
@@ -256,9 +259,15 @@ def test_double_full_simulation(client, n, reset):
 def test_bracket_reset_required_flag(client):
     path = [("WR1M1", "t1"), ("WR1M2", "t2"), ("WR2M1", "t1"), ("LR1M1", "t4"), ("LR2M1", "t4")]
     results = [{"match_id": m, "winner": w} for m, w in path]
+    _, body = ok(client, "double_elim", 4, bracket_reset=True)
+    assert [body["grand_final"][1][k] for k in ("home", "away", "home_seed", "away_seed")] == [None] * 4
+    _, body = ok(client, "double_elim", 4, bracket_reset=True, results=results[:3])
+    gf = body["grand_final"]
+    assert (gf[1]["home"], gf[1]["home_seed"], gf[1]["away"], gf[1]["away_seed"]) == ("t1", 1, None, None)
     _, body = ok(client, "double_elim", 4, bracket_reset=True, results=results)
     gf = body["grand_final"]
-    assert (gf[0]["home"], gf[0]["away"], gf[1]["required"], gf[1]["home"]) == ("t1", "t4", None, None)
+    assert (gf[0]["home"], gf[0]["away"], gf[1]["required"], gf[1]["home"], gf[1]["away"]) == ("t1", "t4", None, "t1", "t4")
+    assert (gf[1]["home_seed"], gf[1]["away_seed"], gf[1]["winner"]) == (1, 4, None)
     _, body = ok(client, "double_elim", 4, bracket_reset=True, results=results + [{"match_id": "GF1", "winner": "t4"}])
     gf1, gf2 = body["grand_final"]
     assert (gf2["conditional"], gf2["required"], gf2["home"], gf2["away"]) == (True, True, "t1", "t4")
@@ -266,7 +275,8 @@ def test_bracket_reset_required_flag(client):
                  results=results + [{"match_id": "GF1", "winner": "t4"}, {"match_id": "GF2", "winner": "t1"}])
     assert body["grand_final"][1]["winner"] == "t1"
     _, body = ok(client, "double_elim", 4, bracket_reset=True, results=results + [{"match_id": "GF1", "winner": "t1"}])
-    assert body["grand_final"][1]["required"] is False
+    gf2 = body["grand_final"][1]
+    assert (gf2["required"], gf2["home"], gf2["away"], gf2["winner"]) == (False, "t1", "t4", None)
     assert bad(client, "double_elim", 4, bracket_reset=True,
                results=results + [{"match_id": "GF1", "winner": "t1"}, {"match_id": "GF2", "winner": "t1"}])[1] == "params.results"
     _, body = ok(client, "double_elim", 4, results=results + [{"match_id": "GF1", "winner": "t4"}])
