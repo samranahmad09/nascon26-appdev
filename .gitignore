@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+cov.json
+.env
+.venv/
+
+mobile/**/build/
+mobile/**/.dart_tool/
+mobile/**/.gradle/
+mobile/**/local.properties
+mobile/**/.flutter-plugins
+mobile/**/.flutter-plugins-dependencies
+mobile/**/*.iml
+mobile/**/.idea/
+!mobile/release/

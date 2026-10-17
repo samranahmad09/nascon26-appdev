@@ -1,0 +1,10 @@
+.git
+.github
+mobile
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.coverage
+cov.json
+.env
+*.md
