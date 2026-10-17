@@ -257,6 +257,13 @@ def test_tie_break_criteria_resolution():
     assert tie_break_criteria({"tie_break_order": ["fair_play", "bogus"]}, EVENT) == ["fair_play", "draw_lots"]
 
 
+def test_missing_sport_config_falls_back_to_score_differential():
+    lg = make_league(["t1", "t2"], [("t1", "t2")], spots=1)
+    result = compute_standings(lg, None, [game(lg, "m1", 3, 1)])
+    assert order(result) == [("t1", None), ("t2", None)]
+    assert [r["diff"] for r in result["table"]] == [2, -2]
+
+
 def test_resolve_keeps_input_order_when_nothing_separates():
     assert resolve(["b", "a", "c"], [], lambda criterion, group: {}) == (["b", "a", "c"], [None, None])
     assert resolve(["solo"], ["draw_lots"], lambda criterion, group: {}) == (["solo"], [])

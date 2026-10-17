@@ -119,6 +119,8 @@ def tie_break_criteria(league: dict, sport: dict) -> list[str]:
 
 
 def compute_standings(league: dict, sport: dict, projections: list[dict]) -> dict:
+    """The full GET /audit/v1/standings body from get_league, get_sport and league_projections output."""
+    sport = sport or {}
     league_id = league["league_id"]
     teams = list(league["teams"])
     fixtures = list(league["fixtures"])
