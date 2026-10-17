@@ -35,12 +35,12 @@ def bracket_size(n: int) -> int:
 
 class Match:
     __slots__ = ("match_id", "bracket", "round", "index", "home", "away", "bye", "winner", "loser",
-                 "winner_to", "loser_to", "decided", "gate")
+                 "winner_to", "loser_to", "decided", "gate", "seeds")
 
     def __init__(self, match_id: str, bracket: str, rnd: int, index: int):
         self.match_id, self.bracket, self.round, self.index = match_id, bracket, rnd, index
         self.home = self.away = self.winner = self.loser = None
-        self.winner_to = self.loser_to = self.gate = None
+        self.winner_to = self.loser_to = self.gate = self.seeds = None
         self.bye = self.decided = False
 
 
@@ -84,6 +84,7 @@ class Bracket:
         n = len(self.teams)
         for i, m in enumerate(first):
             high, low = order[2 * i], order[2 * i + 1]
+            m.seeds = (high, low)
             self.place(m, "home", self.teams[high - 1])
             self.place(m, "away", self.teams[low - 1] if low <= n else EMPTY)
 
@@ -115,9 +116,11 @@ class Bracket:
             pending = waiting
 
     def render(self, m: Match) -> dict:
+        """First-round seeds are the order(B) numbers, even for a missing seed; later
+        rounds show the seed of whichever team occupies the slot."""
+        seeds = m.seeds or (self.seed.get(_team(m.home)), self.seed.get(_team(m.away)))
         return {"match_id": m.match_id, "bracket": m.bracket, "round": m.round, "index": m.index,
-                "home": _team(m.home), "away": _team(m.away),
-                "home_seed": self.seed.get(_team(m.home)), "away_seed": self.seed.get(_team(m.away)),
+                "home": _team(m.home), "away": _team(m.away), "home_seed": seeds[0], "away_seed": seeds[1],
                 "bye": m.bye, "winner": _team(m.winner), "loser": _team(m.loser),
                 "winner_to": _link(m.winner_to), "loser_to": _link(m.loser_to)}
 
@@ -192,6 +195,9 @@ def double_elim(teams: list[str], bracket_reset: bool, results: list[tuple[str, 
     def render(m: Match) -> dict:
         out = br.render(m)
         if m is gf2:
+            first = br.render(gf1)
+            for key in ("home", "away", "home_seed", "away_seed"):
+                out[key] = first[key]
             out["conditional"] = True
             out["required"] = (gf1.winner == gf1.away) if gf1.decided else None
         else:
