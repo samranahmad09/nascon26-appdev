@@ -10,6 +10,7 @@ import '../core/cart.dart';
 import '../core/errors.dart';
 import '../core/net.dart';
 import '../core/repo.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'store_screen.dart';
@@ -185,7 +186,7 @@ class _MatchScreenState extends State<MatchScreen> {
     return Scaffold(
       appBar: brandBar(context, title),
       body: loading
-          ? const LoadingState('Loading match…')
+          ? const SkeletonList(label: 'Loading match…', hero: true, count: 3)
           : (match == null)
               ? ErrorState(error ?? ApiException.network(), () {
                   setState(() => loading = true);
@@ -253,7 +254,8 @@ class ScoreHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Theme.of(context).colorScheme.primary;
+    // Saturated tenant colour in both themes (white text keeps >= 4.5:1).
+    final p = context.watch<BrandNotifier>().brand.primary;
     final on = onColor(p);
     final home = (m['home'] as Map?) ?? const {};
     final away = (m['away'] as Map?) ?? const {};
@@ -315,9 +317,13 @@ class ScoreHeader extends StatelessWidget {
               team(hn, home),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: T.s8),
-                child: FittedBox(
-                  child: Text('${sideScore(home)} – ${sideScore(away)}',
-                      style: tt.displaySmall?.copyWith(color: on)),
+                child: Hero(
+                  tag: 'score-${m['match_id']}',
+                  flightShuttleBuilder: scoreFlight,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ScoreLine(home: sideScore(home), away: sideScore(away), color: on),
+                  ),
                 ),
               ),
               team(an, away),
@@ -345,13 +351,119 @@ class ScoreHeader extends StatelessWidget {
   }
 }
 
+/// "2 – 1" with each number animating (roll + highlight) when it changes.
+class ScoreLine extends StatelessWidget {
+  final String home;
+  final String away;
+  final Color color;
+  const ScoreLine({super.key, required this.home, required this.away, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.displaySmall?.copyWith(color: color);
+    return FittedBox(
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        AnimatedScore(value: home, style: style),
+        Text(' – ', style: style),
+        AnimatedScore(value: away, style: style),
+      ]),
+    );
+  }
+}
+
+class AnimatedScore extends StatefulWidget {
+  final String value;
+  final TextStyle? style;
+  const AnimatedScore({super.key, required this.value, this.style});
+  @override
+  State<AnimatedScore> createState() => _AnimatedScoreState();
+}
+
+class _AnimatedScoreState extends State<AnimatedScore> with SingleTickerProviderStateMixin {
+  late final AnimationController _flash =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+
+  @override
+  void didUpdateWidget(AnimatedScore old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value && !Motion.reduced(context)) _flash.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _flash.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final glow = Theme.of(context).colorScheme.secondary;
+    return Stack(alignment: Alignment.center, clipBehavior: Clip.none, children: [
+      Positioned.fill(
+        child: AnimatedBuilder(
+          animation: _flash,
+          builder: (context, _) {
+            final t = _flash.value;
+            if (t == 0 || t == 1) return const SizedBox.shrink();
+            return Transform.scale(
+              scale: 1 + 0.6 * Curves.easeOutCubic.transform(t),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: glow.withValues(alpha: 0.55 * (1 - t)),
+                  borderRadius: BorderRadius.circular(T.r12),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      BumpOnChange(
+        value: widget.value,
+        scale: 1.2,
+        child: AnimatedSwitcher(
+          duration: Motion.of(context, Motion.long),
+          switchInCurve: Motion.emphasized,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, a) => SlideTransition(
+            position: Tween(begin: const Offset(0, 0.45), end: Offset.zero).animate(a),
+            child: FadeTransition(opacity: a, child: child),
+          ),
+          child: Text(widget.value, key: ValueKey(widget.value), style: widget.style),
+        ),
+      ),
+    ]);
+  }
+}
+
+/// Hero flight from a fixture card's score to the match header (and back):
+/// the score grows into place while its colour blends from card ink to header text.
+Widget scoreFlight(BuildContext flightContext, Animation<double> animation, HeroFlightDirection direction,
+    BuildContext fromContext, BuildContext toContext) {
+  final headerHero = (direction == HeroFlightDirection.push ? toContext.widget : fromContext.widget) as Hero;
+  final material = headerHero.child;
+  final line = material is Material ? material.child : null;
+  if (line is! ScoreLine) return headerHero.child;
+  final ink = flightContext.pal.ink;
+  return AnimatedBuilder(
+    animation: animation,
+    builder: (context, _) => Material(
+      type: MaterialType.transparency,
+      child: FittedBox(
+        child: Text('${line.home} – ${line.away}',
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                color: Color.lerp(ink, line.color, Curves.easeOutCubic.transform(animation.value)))),
+      ),
+    ),
+  );
+}
+
 class _HeaderChip extends StatelessWidget {
   final IconData icon;
   final String text;
   const _HeaderChip({required this.icon, required this.text});
   @override
   Widget build(BuildContext context) {
-    final on = onColor(Theme.of(context).colorScheme.primary);
+    final on = onColor(context.watch<BrandNotifier>().brand.primary);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: T.s12, vertical: T.s4 + 2),
       decoration: BoxDecoration(
@@ -393,9 +505,9 @@ class EventTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(T.s12),
           decoration: BoxDecoration(
-            color: compensated ? T.neutralBg : Colors.white,
+            color: compensated ? context.pal.neutralBg : context.pal.card,
             borderRadius: BorderRadius.circular(T.r12),
-            border: Border.all(color: T.line),
+            border: Border.all(color: context.pal.line),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             CircleAvatar(
@@ -410,7 +522,7 @@ class EventTile extends StatelessWidget {
                   title,
                   style: tt.titleMedium?.copyWith(
                     decoration: compensated ? TextDecoration.lineThrough : null,
-                    color: compensated ? T.inkMuted : T.ink,
+                    color: compensated ? context.pal.inkMuted : context.pal.ink,
                   ),
                 ),
                 if (sub != null) Text(sub, style: tt.bodyMedium),
@@ -452,7 +564,7 @@ class PinnedProductCard extends StatelessWidget {
               color: sec.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(T.r12),
             ),
-            child: Icon(categoryIcon('${product['category']}'), size: 30, color: T.ink),
+            child: Icon(categoryIcon('${product['category']}'), size: 30, color: context.pal.ink),
           ),
           const SizedBox(width: T.s12),
           Expanded(
@@ -466,7 +578,7 @@ class PinnedProductCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium),
             ]),
           ),
-          const Icon(Icons.chevron_right, color: T.inkMuted),
+          Icon(Icons.chevron_right, color: context.pal.inkMuted),
         ]),
       ),
     );

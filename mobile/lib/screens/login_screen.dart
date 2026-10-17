@@ -148,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: T.s16),
                 Row(children: [
-                  const Icon(Icons.dns_outlined, size: 20, color: T.inkMuted),
+                  Icon(Icons.dns_outlined, size: 20, color: context.pal.inkMuted),
                   const SizedBox(width: T.s8),
                   Expanded(
                     child: Text('Server: ${settings.baseUrl}',

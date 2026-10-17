@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../core/cart.dart';
 import '../core/session.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'home_shell.dart';
@@ -40,7 +41,7 @@ class ClubsScreen extends StatelessWidget {
                 DataBanner(loaded),
                 const SizedBox(height: T.s8),
                 for (final c in clubs)
-                  Padding(
+                  FadeSlideIn(index: clubs.indexOf(c), child: Padding(
                     padding: const EdgeInsets.fromLTRB(T.s16, T.s8, T.s16, 0),
                     child: SoftCard(
                       semanticLabel:
@@ -61,11 +62,11 @@ class ClubsScreen extends StatelessWidget {
                             const StatusPill(Icons.star, 'Your club', Tone.brand),
                             const SizedBox(width: T.s4),
                           ],
-                          const Icon(Icons.chevron_right, color: T.inkMuted),
+                          Icon(Icons.chevron_right, color: context.pal.inkMuted),
                         ]),
                       ),
                     ),
-                  ),
+                  )),
               ],
             ),
           );

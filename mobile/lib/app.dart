@@ -84,12 +84,16 @@ class NasconApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: svc.cart),
         ChangeNotifierProvider.value(value: svc.brand),
       ],
-      child: Consumer2<BrandNotifier, Session>(
-        builder: (context, b, session, _) => MaterialApp(
+      child: Consumer3<BrandNotifier, Session, Settings>(
+        builder: (context, b, session, settings, _) => MaterialApp(
           title: 'NaSCon League',
           navigatorKey: navKey,
           debugShowCheckedModeBanner: false,
-          theme: buildTheme(b.brand),
+          theme: buildTheme(b.brand, Brightness.light),
+          darkTheme: buildTheme(b.brand, Brightness.dark),
+          themeMode: settings.themeMode,
+          themeAnimationDuration: const Duration(milliseconds: 250),
+          themeAnimationCurve: Curves.easeOutCubic,
           home: session.loggedIn
               ? HomeShell(key: ValueKey(session.userId))
               : const LoginScreen(),

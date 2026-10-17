@@ -8,6 +8,7 @@ import '../core/net.dart';
 import '../core/repo.dart';
 import '../core/storage.dart';
 import '../core/sync.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'fixtures_screen.dart';
@@ -216,7 +217,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        icon: const Icon(Icons.undo, color: T.danger, size: 32),
+        icon: Icon(Icons.undo, color: context.pal.danger, size: 32),
         title: const Text('Cancel this event?', textAlign: TextAlign.center),
         scrollable: true,
         content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -231,7 +232,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Keep it')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: T.danger),
+            style: FilledButton.styleFrom(backgroundColor: context.pal.danger),
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Cancel event'),
           ),
@@ -276,7 +277,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
     return Scaffold(
       appBar: brandBar(context, 'Score entry'),
       body: loading
-          ? const LoadingState('Loading match…')
+          ? const SkeletonList(label: 'Loading match…', hero: true, count: 3)
           : loaded == null
               ? ErrorState(error ?? ApiException.network(), () {
                   setState(() => loading = true);
@@ -370,7 +371,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                 padding: const EdgeInsets.fromLTRB(T.s16, 0, T.s16, T.s8),
                 child: SoftCard(
                   child: Row(children: [
-                    const Icon(Icons.schedule_send, color: T.warning),
+                    Icon(Icons.schedule_send, color: context.pal.warning),
                     const SizedBox(width: T.s12),
                     Expanded(child: Text(a.label, style: tt.titleMedium)),
                     const StatusPill(Icons.hourglass_empty, 'Pending', Tone.warning),
@@ -398,7 +399,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                       ]),
                     ),
                     TextButton.icon(
-                      style: TextButton.styleFrom(foregroundColor: T.danger),
+                      style: TextButton.styleFrom(foregroundColor: context.pal.danger),
                       onPressed: busy ? null : () => _compensate(e),
                       icon: const Icon(Icons.undo),
                       label: const Text('Cancel'),
@@ -412,8 +413,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
               padding: const EdgeInsets.symmetric(horizontal: T.s16),
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                    foregroundColor: T.danger,
-                    side: const BorderSide(color: T.danger, width: 1.5),
+                    foregroundColor: context.pal.danger,
+                    side: BorderSide(color: context.pal.danger, width: 1.5),
                     minimumSize: const Size.fromHeight(52)),
                 onPressed: busy ? null : () => _transition('match_end'),
                 icon: const Icon(Icons.flag_outlined),

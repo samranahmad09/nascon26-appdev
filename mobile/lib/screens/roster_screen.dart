@@ -9,6 +9,7 @@ import '../core/net.dart';
 import '../core/repo.dart';
 import '../core/session.dart';
 import '../core/sync.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'club_screen.dart';
@@ -127,7 +128,7 @@ class _RosterBody extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const QueueScreen())),
                 child: Row(children: [
-                  const Icon(Icons.schedule_send, color: T.warning),
+                  Icon(Icons.schedule_send, color: context.pal.warning),
                   const SizedBox(width: T.s12),
                   Expanded(
                     child: Text(
@@ -145,7 +146,7 @@ class _RosterBody extends StatelessWidget {
                 message: 'Players registered to this club will be listed here.')
           else
             for (final p in roster)
-              Padding(
+              FadeSlideIn(index: roster.indexOf(p), child: Padding(
                 padding: const EdgeInsets.fromLTRB(T.s16, 0, T.s16, T.s8),
                 child: SoftCard(
                   padding: const EdgeInsets.symmetric(vertical: T.s4),
@@ -178,7 +179,7 @@ class _RosterBody extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
+              )),
         ],
       ),
     );
@@ -222,10 +223,10 @@ class _RosterBody extends StatelessWidget {
           {bool danger = false}) =>
       ListTile(
         minTileHeight: 64,
-        leading: Icon(icon, color: danger ? T.danger : Theme.of(c).colorScheme.primary),
+        leading: Icon(icon, color: danger ? c.pal.danger : Theme.of(c).colorScheme.primary),
         title: Text(title,
             style: TextStyle(
-                fontWeight: T.bold, fontSize: T.body, color: danger ? T.danger : T.ink)),
+                fontWeight: T.bold, fontSize: T.body, color: danger ? c.pal.danger : c.pal.ink)),
         subtitle: Text(sub),
         onTap: () => Navigator.pop(c, v),
       );
@@ -367,6 +368,7 @@ class _MoveDialogState extends State<_MoveDialog> {
     setState(() => busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
+    final snackFg = context.pal.onSnack;
     try {
       if (svc.net.online) {
         try {
@@ -376,7 +378,7 @@ class _MoveDialogState extends State<_MoveDialog> {
           svc.repo.bump();
           nav.pop();
           final deferred = res['state'] == 'deferred_until_match_end';
-          _toast(messenger, Icons.check_circle, T.successBg,
+          _toast(messenger, Icons.check_circle, snackFg,
               deferred ? '$label: accepted. It takes effect when the live match ends.' : '$label: done.');
           return;
         } on ApiException catch (e) {
@@ -394,7 +396,7 @@ class _MoveDialogState extends State<_MoveDialog> {
         label: label,
       );
       nav.pop();
-      _toast(messenger, Icons.schedule_send, Colors.white,
+      _toast(messenger, Icons.schedule_send, snackFg,
           'You\'re offline, so "$label" was saved on this phone. It will sync when you\'re back online.');
     } finally {
       if (mounted) setState(() => busy = false);
@@ -462,7 +464,7 @@ class _MoveDialogState extends State<_MoveDialog> {
       actions: [
         TextButton(onPressed: busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(
-          style: widget.type == 'release' ? FilledButton.styleFrom(backgroundColor: T.danger) : null,
+          style: widget.type == 'release' ? FilledButton.styleFrom(backgroundColor: context.pal.danger) : null,
           onPressed: busy || (widget.type != 'release' && dest == null) ? null : _submit,
           child: busy
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../core/storage.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'fixtures_screen.dart';
@@ -60,11 +61,11 @@ class StandingsScreen extends StatelessWidget {
                     if (spots > 0 && i == spots) const _QualifyLine(),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(T.s16, 0, T.s16, T.s8),
-                      child: StandingsRow(
+                      child: FadeSlideIn(index: i, child: StandingsRow(
                         row: rows[i],
                         name: names['${rows[i]['team_id']}'] ?? '${rows[i]['team_id']}',
                         inZone: i < spots,
-                      ),
+                      )),
                     ),
                   ],
                   const _Legend(),
@@ -108,14 +109,14 @@ class StandingsRow extends StatelessWidget {
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: inZone ? p : T.neutralBg,
+                color: inZone ? p : context.pal.neutralBg,
                 shape: BoxShape.circle,
               ),
               child: Text('${row['rank']}',
                   style: TextStyle(
                       fontWeight: T.bold,
                       fontSize: T.body,
-                      color: inZone ? onColor(p) : T.ink)),
+                      color: inZone ? onColor(p) : context.pal.ink)),
             ),
             const SizedBox(width: T.s12),
             Expanded(

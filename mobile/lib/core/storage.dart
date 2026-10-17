@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -39,12 +40,18 @@ class Settings extends ChangeNotifier {
   bool useSampleData = false; // every app route is live; kept only as a developer fallback
   String deviceId = '';
   String? leagueId;
+  ThemeMode themeMode = ThemeMode.system;
 
   void load() {
     final m = LocalStore.meta;
     baseUrl = m.get('base_url') ?? defaultUrl;
     useSampleData = (m.get('sample_data') ?? 'false') == 'true';
     leagueId = m.get('league_id');
+    themeMode = switch (m.get('theme_mode')) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
     var id = m.get('device_id');
     if (id == null || id.isEmpty) {
       id = 'dev-${const Uuid().v4().substring(0, 13)}';
@@ -72,6 +79,12 @@ class Settings extends ChangeNotifier {
   Future<void> setUseSampleData(bool v) async {
     useSampleData = v;
     await LocalStore.meta.put('sample_data', '$v');
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode t) async {
+    themeMode = t;
+    await LocalStore.meta.put('theme_mode', t.name);
     notifyListeners();
   }
 

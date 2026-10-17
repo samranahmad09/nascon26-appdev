@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app.dart';
 import '../core/session.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'club_screen.dart';
@@ -59,7 +60,7 @@ class _HomeShellState extends State<HomeShell> {
         if (!didPop) setState(() => index = 0);
       },
       child: Scaffold(
-        body: IndexedStack(
+        body: FadeIndexedStack(
           index: index,
           children: [for (final t in tabs) t.build()],
         ),
