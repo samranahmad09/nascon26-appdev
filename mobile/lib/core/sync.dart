@@ -55,7 +55,10 @@ class SyncResult {
           : 'Saved on the server.';
     }
     if (status == 'duplicate') return 'It was already on the server, so nothing changed.';
-    return friendlyError(errorCode);
+    final msg = friendlyError(errorCode);
+    return msg.startsWith('Something went wrong')
+        ? 'The server refused this change, so nothing was applied.'
+        : msg;
   }
 
   Map<String, dynamic> toJson() => {
@@ -146,11 +149,12 @@ class SyncQueue extends ChangeNotifier {
     if (_running) return null;
     final items = pending;
     if (items.isEmpty) return null;
-    if (!net.online) {
-      final ok = await net.probe();
-      if (!ok) return 'You\'re offline. The actions stay saved and will sync when you\'re back online.';
-    }
+    // Claim the run before any await so a second trigger can't send the same batch.
     _running = true;
+    if (!net.online && !await net.probe()) {
+      _running = false;
+      return 'You\'re offline. The actions stay saved and will sync when you\'re back online.';
+    }
     lastError = null;
     net.setSyncing(true);
     notifyListeners();
