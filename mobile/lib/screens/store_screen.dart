@@ -12,6 +12,7 @@ import '../app.dart';
 import '../core/cart.dart';
 import '../core/errors.dart';
 import '../core/net.dart';
+import '../core/storage.dart';
 import '../core/sync.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
@@ -91,6 +92,24 @@ class _StoreScreenState extends State<StoreScreen> {
                         message: 'Club merchandise will appear here when it is added.'),
                   )
                 else ...[
+                  if (Orders.all().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(T.s16, T.s12, T.s16, 0),
+                      child: SoftCard(
+                        padding: const EdgeInsets.symmetric(horizontal: T.s16, vertical: T.s12),
+                        onTap: () => Navigator.of(context)
+                            .push(MaterialPageRoute(builder: (_) => const OrdersScreen())),
+                        child: Row(children: [
+                          const Icon(Icons.receipt_long_outlined),
+                          const SizedBox(width: T.s12),
+                          Expanded(
+                            child: Text('Your orders and receipts (${Orders.all().length})',
+                                style: Theme.of(context).textTheme.titleMedium),
+                          ),
+                          const Icon(Icons.chevron_right, color: T.inkMuted),
+                        ]),
+                      ),
+                    ),
                   SizedBox(
                     height: 64,
                     child: ListView(
@@ -458,10 +477,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'payment': {'token': token},
       }, timeout: const Duration(seconds: 30)) as Map<String, dynamic>;
       if (widget.fromCart) svc.cart.clear();
+      final names = {for (final l in widget.lines) l.variantId: '${l.title} (${l.options})'};
+      await Orders.add(res, names);
       svc.repo.bump();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
-          builder: (_) => ReceiptScreen(order: res, lines: widget.lines)));
+          builder: (_) => ReceiptScreen(order: res, names: names)));
     } on ApiException catch (e) {
       final msg = e.code == 'OUT_OF_STOCK'
           ? 'Sorry, ${_variantName(e.details['variant_id'])} just sold out. Nothing was charged. Choose another size.'
@@ -597,10 +618,79 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
 const _files = MethodChannel('nascon/files');
 
+/// Paid orders kept on this phone so a receipt can be reopened later.
+class Orders {
+  static List<Map<String, dynamic>> all() {
+    final m = LocalStore.readJson(LocalStore.meta, 'orders');
+    return ((m?['list'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  static Future<void> add(Map<String, dynamic> order, Map<String, String> names) async {
+    final list = [
+      {'order': order, 'names': names},
+      ...all().where((o) => (o['order'] as Map?)?['order_id'] != order['order_id']),
+    ].take(20).toList();
+    await LocalStore.writeJson(LocalStore.meta, 'orders', {'list': list});
+  }
+}
+
+class OrdersScreen extends StatelessWidget {
+  const OrdersScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final orders = Orders.all();
+    final tt = Theme.of(context).textTheme;
+    return Scaffold(
+      appBar: brandBar(context, 'Your orders'),
+      body: orders.isEmpty
+          ? const EmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'No orders yet',
+              message: 'Receipts of what you buy on this phone will be kept here.')
+          : Constrained(
+              child: ListView(padding: const EdgeInsets.all(T.s16), children: [
+                for (final o in orders)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: T.s12),
+                    child: Builder(builder: (context) {
+                      final order = Map<String, dynamic>.from(o['order'] as Map);
+                      final payload = ((order['receipt'] as Map?)?['payload'] as Map?) ?? order;
+                      final names = Map<String, String>.from(
+                          (o['names'] as Map? ?? const {}).map((k, v) => MapEntry('$k', '$v')));
+                      return SoftCard(
+                        semanticLabel: 'Order ${order['order_id']}, opens the receipt.',
+                        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => ReceiptScreen(order: order, names: names))),
+                        child: ExcludeSemantics(
+                          child: Row(children: [
+                            const Icon(Icons.receipt_long_outlined, size: 32),
+                            const SizedBox(width: T.s12),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text('${order['order_id']}', style: tt.titleMedium),
+                                Text(when(payload['paid_at'] as String?), style: tt.bodySmall),
+                              ]),
+                            ),
+                            Text(money((payload['total_minor'] as num?) ?? 0, '${payload['currency'] ?? 'PKR'}'),
+                                style: tt.titleMedium?.copyWith(fontFeatures: T.tabular)),
+                            const Icon(Icons.chevron_right, color: T.inkMuted),
+                          ]),
+                        ),
+                      );
+                    }),
+                  ),
+              ]),
+            ),
+    );
+  }
+}
+
 class ReceiptScreen extends StatefulWidget {
   final Map<String, dynamic> order;
-  final List<CartLine> lines;
-  const ReceiptScreen({super.key, required this.order, required this.lines});
+  final Map<String, String> names; // variant_id -> "Product (size · colour)"
+  const ReceiptScreen({super.key, required this.order, required this.names});
   @override
   State<ReceiptScreen> createState() => _ReceiptScreenState();
 }
@@ -672,12 +762,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> with SingleTickerProvider
     }
   }
 
-  String _nameOf(String variantId) {
-    for (final l in widget.lines) {
-      if (l.variantId == variantId) return '${l.title} (${l.options})';
-    }
-    return variantId;
-  }
+  String _nameOf(String variantId) => widget.names[variantId] ?? variantId;
 
   @override
   Widget build(BuildContext context) {
