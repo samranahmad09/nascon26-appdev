@@ -19,9 +19,30 @@ async def json_body(request: Request):
     if not raw.strip():
         return None
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         raise validation_error(["body"], "Request body is not valid JSON.")
+    if not _storable(data):
+        raise validation_error(["body"], "Text may not contain NUL characters or unpaired surrogates.")
+    return data
+
+
+def _storable(value) -> bool:
+    """Postgres text cannot hold NUL and UTF-8 cannot encode lone surrogates; reject them up front
+    so hostile strings become a 400 instead of a 500 deep inside a module."""
+    if isinstance(value, str):
+        if "\x00" in value:
+            return False
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:
+            return False
+        return True
+    if isinstance(value, dict):
+        return all(_storable(k) and _storable(v) for k, v in value.items())
+    if isinstance(value, list):
+        return all(_storable(v) for v in value)
+    return True
 
 
 def is_int(value) -> bool:

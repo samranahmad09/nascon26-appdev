@@ -10,7 +10,7 @@ from ...core.errors import ApiError, not_found
 from ...core.seed import user_by_email
 from ...core.validate import Validator, json_body
 from ..sports import get_sport
-from .demo import optional_module
+from .demo import SCORING_ALIAS, TENANT_ALIAS, optional_module
 
 router = APIRouter()
 
@@ -111,10 +111,11 @@ def league_fixtures(league_id: str, claims=Depends(current_claims)):
     scoring = optional_module("app.modules.scoring.service")
     with db.tx() as conn:
         _league_row(conn, claims, league_id)
-        league = scoring.get_league(conn, league_id) if scoring else None
+        scoring_id = SCORING_ALIAS.get(league_id, league_id)
+        league = scoring.get_league(conn, scoring_id) if scoring else None
         if league is None:
             return {"league_id": league_id, "matches": []}
-        projections = scoring.league_projections(conn, league_id)
+        projections = scoring.league_projections(conn, scoring_id)
         names = _team_names(conn)
         meta = _meta(conn, [p["match_id"] for p in projections])
     matches = [_summary(p, names, meta.get(p["match_id"])) for p in projections]
@@ -133,6 +134,7 @@ def match_detail(match_id: str, claims=Depends(current_claims)):
         if proj is None:
             raise not_found("MATCH_NOT_FOUND", f"Match {match_id} does not exist.", {"match_id": match_id})
         if proj.get("league_id"):
+            proj["league_id"] = TENANT_ALIAS.get(proj["league_id"], proj["league_id"])
             _league_row(conn, claims, proj["league_id"])
         sport = get_sport(conn, proj["sport_id"]) or {}
         names = _team_names(conn)
@@ -156,10 +158,13 @@ def compute_league_standings(conn, league_id: str) -> dict | None:
     logic = optional_module("app.modules.standings.logic")
     if scoring is None or logic is None or not hasattr(logic, "compute_standings"):
         return None
-    league = scoring.get_league(conn, league_id)
+    scoring_id = SCORING_ALIAS.get(league_id, league_id)
+    league = scoring.get_league(conn, scoring_id)
     if league is None:
         return None
-    return logic.compute_standings(league, get_sport(conn, league["sport_id"]), scoring.league_projections(conn, league_id))
+    body = logic.compute_standings(league, get_sport(conn, league["sport_id"]), scoring.league_projections(conn, scoring_id))
+    body["league_id"] = league_id
+    return body
 
 
 @router.get("/api/v1/leagues/{league_id}/standings")

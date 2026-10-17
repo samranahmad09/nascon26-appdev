@@ -1,21 +1,93 @@
 {
   "league": {
     "league_id": "league-alpha-1",
-    "teams": ["club-alpha-1", "club-alpha-2", "club-alpha-3", "club-alpha-4"],
-    "points": {"win": 3, "draw": 1, "loss": 0},
+    "scoring_league_id": "demo-league-alpha-1",
+    "teams": [
+      "club-alpha-1",
+      "club-alpha-2",
+      "club-alpha-3",
+      "club-alpha-4"
+    ],
+    "points": {
+      "win": 3,
+      "draw": 1,
+      "loss": 0
+    },
     "qualification_spots": 2,
     "fixtures": [
-      {"match_id": "demo-apl-r1-m1", "round": 1, "home": "club-alpha-1", "away": "club-alpha-4", "scheduled_at": "2026-10-03T14:00:00Z", "result": [2, 1]},
-      {"match_id": "demo-apl-r1-m2", "round": 1, "home": "club-alpha-2", "away": "club-alpha-3", "scheduled_at": "2026-10-03T16:00:00Z", "result": [1, 1]},
-      {"match_id": "demo-apl-r2-m1", "round": 2, "home": "club-alpha-3", "away": "club-alpha-1", "scheduled_at": "2026-10-10T14:00:00Z", "result": [0, 3]},
-      {"match_id": "demo-apl-r2-m2", "round": 2, "home": "club-alpha-4", "away": "club-alpha-2", "scheduled_at": "2026-10-10T16:00:00Z", "result": [2, 2]},
-      {"match_id": "demo-apl-r3-m1", "round": 3, "home": "club-alpha-1", "away": "club-alpha-2", "scheduled_at": "2026-10-17T10:00:00Z", "live": [1, 0]},
-      {"match_id": "demo-apl-r3-m2", "round": 3, "home": "club-alpha-3", "away": "club-alpha-4", "scheduled_at": "2026-10-18T14:00:00Z"}
+      {
+        "match_id": "demo-apl-r1-m1",
+        "round": 1,
+        "home": "club-alpha-1",
+        "away": "club-alpha-4",
+        "scheduled_at": "2026-10-03T14:00:00Z",
+        "result": [
+          2,
+          1
+        ]
+      },
+      {
+        "match_id": "demo-apl-r1-m2",
+        "round": 1,
+        "home": "club-alpha-2",
+        "away": "club-alpha-3",
+        "scheduled_at": "2026-10-03T16:00:00Z",
+        "result": [
+          1,
+          1
+        ]
+      },
+      {
+        "match_id": "demo-apl-r2-m1",
+        "round": 2,
+        "home": "club-alpha-3",
+        "away": "club-alpha-1",
+        "scheduled_at": "2026-10-10T14:00:00Z",
+        "result": [
+          0,
+          3
+        ]
+      },
+      {
+        "match_id": "demo-apl-r2-m2",
+        "round": 2,
+        "home": "club-alpha-4",
+        "away": "club-alpha-2",
+        "scheduled_at": "2026-10-10T16:00:00Z",
+        "result": [
+          2,
+          2
+        ]
+      },
+      {
+        "match_id": "demo-apl-r3-m1",
+        "round": 3,
+        "home": "club-alpha-1",
+        "away": "club-alpha-2",
+        "scheduled_at": "2026-10-17T10:00:00Z",
+        "live": [
+          1,
+          0
+        ],
+        "pinned_product": "prod-jersey-001"
+      },
+      {
+        "match_id": "demo-apl-r3-m2",
+        "round": 3,
+        "home": "club-alpha-3",
+        "away": "club-alpha-4",
+        "scheduled_at": "2026-10-18T14:00:00Z"
+      }
     ],
     "roster": {
-      "transfer_window": {"open": "2026-10-01", "close": "2026-12-31"},
+      "transfer_window": {
+        "open": "2026-10-01",
+        "close": "2026-12-31"
+      },
       "max_squad_size": 25,
-      "required_positions": {"gk": 1}
+      "required_positions": {
+        "gk": 1
+      }
     }
   }
 }

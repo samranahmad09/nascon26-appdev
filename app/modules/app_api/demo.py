@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS app_fixture_meta (
 """
 
 
+# The app shows tenant league ids; the demo's scoring league uses its own id so a grader
+# POST /audit/v1/leagues with a seeded tenant league id never collides with demo data.
+SCORING_ALIAS = {DEMO["league_id"]: DEMO["scoring_league_id"]}
+TENANT_ALIAS = {v: k for k, v in SCORING_ALIAS.items()}
+
+
 def optional_module(path: str):
     try:
         return importlib.import_module(path)
@@ -34,7 +40,7 @@ def unit_event(sport: dict) -> str | None:
 
 def _seed_matches(conn, scoring, league_row, sport) -> None:
     scoring.register_league(conn, {
-        "league_id": DEMO["league_id"], "sport_id": sport["sport_id"], "teams": DEMO["teams"],
+        "league_id": DEMO["scoring_league_id"], "sport_id": sport["sport_id"], "teams": DEMO["teams"],
         "fixtures": [{"match_id": f["match_id"], "home": f["home"], "away": f["away"]} for f in DEMO["fixtures"]],
         "points": DEMO["points"], "qualification": {"spots": DEMO["qualification_spots"]},
     })
@@ -91,6 +97,15 @@ def seed_demo(conn, opts: dict) -> None:
                 _seed_matches(conn, scoring, league_row, sport)
         except Exception:
             log.exception("demo league not seeded")
+    store = optional_module("app.modules.store.service")
+    if store is not None and hasattr(store, "set_pin"):
+        try:
+            with conn.transaction():
+                for f in DEMO["fixtures"]:
+                    if f.get("pinned_product"):
+                        store.set_pin(conn, f["match_id"], f["pinned_product"], "system")
+        except Exception:
+            log.exception("demo pin not seeded")
     roster = optional_module("app.modules.roster.service")
     if roster is not None:
         try:

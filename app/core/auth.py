@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import time
@@ -43,7 +44,25 @@ def token_for_user(user: dict) -> str:
     })
 
 
+def _canonical_segments(token: str) -> bool:
+    """PyJWT tolerates non-canonical base64url (spare low bits in the last character), so a
+    tampered signature can still verify. Require every segment to re-encode to itself."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        for seg in parts:
+            raw = base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+            if base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii") != seg:
+                return False
+    except (ValueError, UnicodeError):
+        return False
+    return True
+
+
 def decode_token(token: str) -> dict:
+    if not _canonical_segments(token):
+        raise ApiError(401, "UNAUTHENTICATED", "Token is missing, invalid or expired.")
     try:
         return jwt.decode(token, config.JWT_SECRET, algorithms=[ALGORITHM], options={"require": ["exp", "sub"]})
     except jwt.PyJWTError:

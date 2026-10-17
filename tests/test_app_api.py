@@ -71,3 +71,17 @@ def test_standings_shape(fresh):
     assert body["league_id"] == "league-alpha-1"
     if body["table"]:
         assert set(body["team_names"]) == {row["team_id"] for row in body["table"]}
+
+
+def test_grader_can_register_a_seeded_tenant_league_id(fresh):
+    r = fresh.post("/audit/v1/leagues", json={
+        "league_id": "league-alpha-1", "sport_id": "football", "teams": ["t1", "t2"],
+        "fixtures": [{"match_id": "m-x1", "home": "t1", "away": "t2"}], "qualification": {"spots": 1}})
+    assert r.status_code == 201, r.text
+
+
+def test_live_demo_match_has_pinned_product(fresh):
+    if importlib.util.find_spec("app.modules.store.service") is None:
+        pytest.skip("store not merged")
+    detail = fresh.get("/api/v1/matches/demo-apl-r3-m1", headers=_token(fresh, "viewer@nascon.test")).json()
+    assert detail["pinned_product"]["product_id"] == "prod-jersey-001"

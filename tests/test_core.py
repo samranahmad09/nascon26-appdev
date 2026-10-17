@@ -88,3 +88,34 @@ def test_login_demo_accounts(fresh):
         assert r.json()["token"]
     r = fresh.post("/api/v1/auth/login", json={"email": "admin@nascon.test", "password": "wrong"})
     assert r.status_code == 401
+
+
+def test_noncanonical_jwt_signature_is_rejected():
+    import base64
+
+    import pytest
+
+    from app.core.auth import decode_token, issue_token
+    from app.core.errors import ApiError
+
+    token = issue_token({"sub": "u1", "role": "viewer"})
+    assert decode_token(token)["sub"] == "u1"
+    head, payload, sig = token.split(".")
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    idx = alphabet.index(sig[-1])
+    sibling = alphabet[idx ^ 1]
+    raw_a = base64.urlsafe_b64decode(sig + "=" * (-len(sig) % 4))
+    raw_b = base64.urlsafe_b64decode(sig[:-1] + sibling + "=" * (-len(sig) % 4))
+    assert raw_a == raw_b  # same bytes, different text: PyJWT alone would accept it
+    with pytest.raises(ApiError) as err:
+        decode_token(f"{head}.{payload}.{sig[:-1]}{sibling}")
+    assert err.value.status == 401
+    with pytest.raises(ApiError):
+        decode_token("not-a-jwt")
+
+
+def test_nul_and_lone_surrogate_text_is_400(client):
+    for raw in (b'{"sport_id": "a\u0000b"}', b'{"sport_id": "\ud800"}'):
+        r = client.post("/audit/v1/sports", content=raw, headers={"content-type": "application/json"})
+        assert r.status_code == 400, raw
+        assert r.json()["error"]["code"] == "VALIDATION_ERROR"
