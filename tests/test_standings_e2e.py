@@ -85,7 +85,7 @@ def test_compensation_after_qualification_recomputes_everything(fresh):
         "fixtures": [{"match_id": "c1", "home": "t1", "away": "t2"}, {"match_id": "c2", "home": "t1", "away": "t3"},
                      {"match_id": "c3", "home": "t2", "away": "t3"}],
         "qualification": {"spots": 1}})
-    goal = play(fresh, "c1", [("t1", "tally")])[0]
+    first = play(fresh, "c1", [("t1", "tally")])[0]
     play(fresh, "c2", [("t1", "tally")])
     event(fresh, "c3", "match_start")
     event(fresh, "c3", "score", {"team_id": "t2", "event_type": "tally"})
@@ -96,7 +96,7 @@ def test_compensation_after_qualification_recomputes_everything(fresh):
                              (3, "t3", 0, -2, "eliminated", None)]
     assert before["table"][2]["fair_play"] == -2
 
-    event(fresh, "c1", "compensation", {"compensates": goal, "reason": "goal disallowed after review"})
+    event(fresh, "c1", "compensation", {"compensates": first, "reason": "disallowed after review"})
     after = standings(fresh, "lg-1")
     # 0-0 now: t1 and t2 level on everything, the default seed 42 lots put t1 before t2 (Appendix A)
     assert after["table"][:2] == [
@@ -107,7 +107,7 @@ def test_compensation_after_qualification_recomputes_everything(fresh):
     ]
     assert after["h2h"]["t1"]["t2"] == {"played": 1, "points": 1, "scored": 0, "conceded": 0}
     score = fresh.get("/audit/v1/score/c1").json()
-    original = next(e for e in score["events"] if e["event_id"] == goal)
+    original = next(e for e in score["events"] if e["event_id"] == first)
     assert original["compensated"] is True and original["payload"] == {"team_id": "t1", "event_type": "tally"}
 
 

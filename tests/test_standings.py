@@ -137,6 +137,36 @@ def test_three_way_mini_league_split_then_pair_restarts_from_h2h_points():
     ]
 
 
+FOUR_WAY = [("t1", "t2"), ("t2", "t3"), ("t3", "t4"), ("t4", "t1"), ("t1", "t3"), ("t2", "t4")]
+
+
+def test_four_way_tie_middle_pair_restarts_and_separators_follow_the_split_level():
+    # winning cycle t1>t2>t3>t4>t1 plus two draws: everyone W1 D1 L1 = 4 points
+    lg = make_league(["t1", "t2", "t3", "t4"], FOUR_WAY)
+    projections = [game(lg, "m1", 2, 0), game(lg, "m2", 1, 0), game(lg, "m3", 1, 0), game(lg, "m4", 1, 0),
+                   game(lg, "m5", 0, 0), game(lg, "m6", 0, 0)]
+    result = compute_standings(lg, EVENT, projections)
+    # whole group: h2h_points all 4; h2h_diff t1 +1 | t3 0, t4 0 | t2 -1; {t3, t4} restarts: t3 beat t4
+    assert result["table"] == [
+        row(1, "t1", 3, 1, 1, 1, 2, 1, 1, 4, 0, "still_possible", "h2h_diff"),
+        row(2, "t3", 3, 1, 1, 1, 1, 1, 0, 4, 0, "still_possible", "h2h_points"),
+        row(3, "t4", 3, 1, 1, 1, 1, 1, 0, 4, 0, "still_possible", "h2h_diff"),
+        row(4, "t2", 3, 1, 1, 1, 1, 2, -1, 4, 0, "still_possible"),
+    ]
+
+
+def test_four_way_tie_splits_into_two_pairs_resolved_independently():
+    # h2h_diff splits {t1, t3} (+1) from {t2, t4} (-1); each pair drew its meeting and restarts:
+    # {t1, t3} is level on everything (lots: t1 first), {t2, t4} splits on fair_play
+    lg = make_league(["t1", "t2", "t3", "t4"], FOUR_WAY)
+    projections = [game(lg, "m1", 2, 0), game(lg, "m2", 1, 0), game(lg, "m3", 2, 0), game(lg, "m4", 1, 0),
+                   game(lg, "m5", 0, 0), game(lg, "m6", 0, 0, away_fp=-1)]
+    result = compute_standings(lg, EVENT, projections)
+    assert order(result) == [("t1", "draw_lots"), ("t3", "h2h_diff"), ("t2", "fair_play"), ("t4", None)]
+    assert [(r["diff"], r["scored"], r["fair_play"]) for r in result["table"]] == [(1, 2, 0), (1, 2, 0), (-1, 1, 0),
+                                                                                  (-1, 1, -1)]
+
+
 def test_three_way_tie_fully_split_by_one_criterion():
     lg = make_league(["t1", "t2", "t3"], [("t1", "t2"), ("t2", "t3"), ("t3", "t1")], sport=ROUND)
     projections = [game(lg, "m1", 2, 1), game(lg, "m2", 2, 0), game(lg, "m3", 2, 1)]
@@ -367,7 +397,7 @@ def test_recompute_after_result_corrected_by_compensation():
     assert [(r["team_id"], r["points"], r["status"]) for r in before["table"]] == [
         ("t1", 6, "clinched"), ("t2", 3, "eliminated"), ("t3", 0, "eliminated")]
     assert before["h2h"]["t1"]["t2"] == {"played": 1, "points": 3, "scored": 1, "conceded": 0}
-    # t1's only goal in m1 is compensated: the projection now shows 0-0, a draw
+    # t1's only score in m1 is compensated: the projection now shows 0-0, a draw
     after = compute_standings(lg, EVENT, [game(lg, "m1", 0, 0), game(lg, "m2", 1, 0), game(lg, "m3", 1, 0)])
     assert after["table"] == [
         row(1, "t1", 2, 1, 1, 0, 1, 0, 1, 4, 0, "still_possible", "draw_lots"),
