@@ -258,6 +258,8 @@ def test_search_timeout_keeps_exact_optimum(monkeypatch):
     assert all(b not in played[a] for a, b in pairs)
     assert sum(score[a] - score[b] for a, b in pairs) == 6
     assert matching.min_cost_pairing([], score, played) == []
+    with pytest.raises(matching._Timeout):
+        matching._first_optimal([2, 0], [0b10, 0b01], -1, time.monotonic() + 5)
 
 
 @pytest.mark.parametrize("mode", ["random", "home"])

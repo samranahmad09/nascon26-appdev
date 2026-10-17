@@ -6,7 +6,7 @@ algorithm decides whether any rematch-free pairing exists; the weighted blossom 
 (weighted.py) then gives the exact minimum cost in O(n^3). A short depth-first search
 re-finds a pairing of that cost with the top of the table paired first (the spec
 example's tie-break), pruned by the cost of pairing the remaining teams adjacently in
-score order; if it runs out of time the weighted solution is used as is.
+score order; past its time budget the weighted solution is used as is.
 """
 import time
 from collections import deque
@@ -156,7 +156,8 @@ def _first_optimal(score: list[int], allow: list[int], target: int, deadline: fl
         return None
 
     mask = (1 << len(score)) - 1
-    solve(mask, target + 1)
+    if solve(mask, target + 1) is None:
+        raise _Timeout
     pairs = []
     while mask:
         first = (mask & -mask).bit_length() - 1
