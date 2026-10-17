@@ -243,19 +243,21 @@ def _entries(conn, league_id: str, player_id: str | None = None) -> list[dict]:
     return conn.execute(sql + " ORDER BY seq", params).fetchall()
 
 
-def _fold(initial_squad, entries: list[dict], as_of: dt.date | None = None) -> dict:
+def _fold(initial_squad, entries: list[dict], as_of: dt.date | None = None, initial_role=None) -> dict:
     """Registration after the given entries (oldest first); with as_of, only entries effective by then."""
-    reg = {"squad_id": initial_squad, "parent_squad_id": None, "type": "initial", "loan_end": None}
+    reg = {"squad_id": initial_squad, "parent_squad_id": None, "type": "initial", "loan_end": None,
+           "role": initial_role}
     for e in entries:
         if as_of is not None and e["effective_date"] > as_of:
             continue
         if e["action"] == "release":
-            reg = {"squad_id": None, "parent_squad_id": None, "type": "release", "loan_end": None}
+            reg = {"squad_id": None, "parent_squad_id": None, "type": "release", "loan_end": None, "role": None}
         elif e["action"] == "loan":
             reg = {"squad_id": e["to_squad_id"], "parent_squad_id": e["from_squad_id"], "type": "loan",
-                   "loan_end": e["loan_end_date"]}
+                   "loan_end": e["loan_end_date"], "role": NEW_ROLE}
         else:
-            reg = {"squad_id": e["to_squad_id"], "parent_squad_id": None, "type": e["action"], "loan_end": None}
+            reg = {"squad_id": e["to_squad_id"], "parent_squad_id": None, "type": e["action"], "loan_end": None,
+                   "role": NEW_ROLE}
     return reg
 
 
@@ -263,7 +265,7 @@ def _on(reg: dict, day: dt.date) -> tuple[dict, bool]:
     """The registration on `day`, and whether a loan has ended by then (a loan_return is due)."""
     if reg["type"] == "loan" and day > reg["loan_end"]:
         return {"squad_id": reg["parent_squad_id"], "parent_squad_id": None, "type": "loan_return",
-                "loan_end": None}, True
+                "loan_end": None, "role": NEW_ROLE}, True
     return reg, False
 
 
@@ -278,6 +280,26 @@ def _league_state(conn, league_id: str, day: dt.date) -> dict[str, dict]:
         reg, _ = _on(_fold(p["squad_id"], by_player.get(p["player_id"], [])), day)
         state[p["player_id"]] = {"squad_id": reg["squad_id"], "position": p["position"]}
     return state
+
+
+def squad_members(conn, league_id: str, squad_id: str, day: dt.date | None = None) -> list[dict] | None:
+    """Players registered to the squad on `day` (default today) for the club profile; None if no roster league."""
+    if _league(conn, league_id) is None:
+        return None
+    day = day or today()
+    by_player: dict[str, list] = {}
+    for e in _entries(conn, league_id):
+        by_player.setdefault(e["player_id"], []).append(e)
+    shirts = {r["player_id"]: r["shirt_number"] for r in conn.execute("SELECT player_id, shirt_number FROM players")}
+    members = []
+    for p in conn.execute("SELECT * FROM ro_players WHERE league_id = %s ORDER BY ord", (league_id,)).fetchall():
+        reg, _ = _on(_fold(p["squad_id"], by_player.get(p["player_id"], []), day, p["role"]), day)
+        if reg["squad_id"] == squad_id:
+            members.append({"player_id": p["player_id"], "name": p["name"], "position": p["position"],
+                            "role": reg["role"], "shirt_number": shirts.get(p["player_id"]), "squad_id": squad_id,
+                            "parent_squad_id": reg["parent_squad_id"]})
+    members.sort(key=lambda m: (m["shirt_number"] is None, m["shirt_number"] or 0, m["player_id"]))
+    return members
 
 
 def _append(conn, league_id: str, player_id: str, action: str, from_squad, to_squad, effective: dt.date,

@@ -379,3 +379,23 @@ def test_player_version_counts_entries(fresh, kind):
     assert move(fresh, type=kind, loan_end_date="2026-10-05" if kind == "loan" else None).status_code == 201
     with db.tx() as conn:
         assert service.player_version(conn, "p2", "lg-r1") == 1
+
+
+def test_squad_members_for_club_profile(fresh):
+    from app.core import db
+    from app.modules.roster import service
+
+    make_league(fresh)
+    assert move(fresh, type="loan", effective_date="2026-09-10", loan_end_date="2026-09-20").status_code == 201
+    on = dt.date(2026, 9, 15)
+    with db.tx() as conn:
+        assert service.squad_members(conn, "lg-none", "sq-a") is None
+        assert [(m["player_id"], m["role"]) for m in service.squad_members(conn, "lg-r1", "sq-a", on)] == [("p1", "captain")]
+        loaned = service.squad_members(conn, "lg-r1", "sq-b", on)
+        assert loaned == [{"player_id": "p2", "name": "Bilal", "position": "df", "role": "substitute",
+                           "shirt_number": None, "squad_id": "sq-b", "parent_squad_id": "sq-a"}]
+        back = service.squad_members(conn, "lg-r1", "sq-a", dt.date(2026, 9, 21))
+        assert [(m["player_id"], m["role"]) for m in back] == [("p1", "captain"), ("p2", "substitute")]
+        mirrored = service.squad_members(conn, "league-alpha-1", "club-alpha-1")
+        assert "player-alpha-1" in [m["player_id"] for m in mirrored]
+        assert all(m["shirt_number"] is not None for m in mirrored)
