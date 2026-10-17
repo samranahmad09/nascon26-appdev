@@ -3,7 +3,7 @@
 Time model. A player's registration is the result of every accepted change in this league, oldest first.
 Rule checks are judged on the request's effective_date: a loan whose loan_end_date is before that date has
 ended and the player is back with the lender. The return is written once to the audit trail as a loan_return
-entry (who "system", effective the day after loan_end_date) by the first history read whose as_of, or the
+entry (who "system", why null, effective the day after loan_end_date) by the first history read whose as_of, or the
 first accepted change of that player whose effective_date, is past the loan end.
 
 Stored entries and responses are JSON (not JSONB) so a replay is byte-identical.
@@ -32,7 +32,7 @@ ACTIVE = "active"
 DEFERRED = "deferred_until_match_end"
 NEW_ROLE = "substitute"
 SYSTEM = "system"
-RETURN_REASON = "Loan period ended"
+RETURN_REASON = None
 NO_LIMIT = 1_000_000
 
 SCHEMA = """
@@ -363,8 +363,8 @@ def validate_transfer(body) -> dict:
         v.bad("loan_end_date")
     if req["type"] != "loan":
         req["loan_end_date"] = None
-    req["reason"] = v.string("reason", min_len=0)
-    req["requested_by"] = v.string("requested_by")
+    req["reason"] = v.string("reason", required=False, min_len=0)
+    req["requested_by"] = v.string("requested_by", required=False, min_len=0)
     v.check()
     return req
 
