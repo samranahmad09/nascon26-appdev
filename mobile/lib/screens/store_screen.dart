@@ -14,6 +14,7 @@ import '../core/errors.dart';
 import '../core/net.dart';
 import '../core/storage.dart';
 import '../core/sync.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'home_shell.dart';
@@ -49,10 +50,14 @@ class CartButton extends StatelessWidget {
       tooltip: cart.count == 0 ? 'Cart (empty)' : 'Cart, ${cart.count} items',
       onPressed: () =>
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartScreen())),
-      icon: Badge(
-        isLabelVisible: cart.count > 0,
-        label: Text('${cart.count}'),
-        child: const Icon(Icons.shopping_cart_outlined),
+      icon: BumpOnChange(
+        value: cart.count,
+        scale: 1.3,
+        child: Badge(
+          isLabelVisible: cart.count > 0,
+          label: Text('${cart.count}'),
+          child: const Icon(Icons.shopping_cart_outlined),
+        ),
       ),
     );
   }
@@ -109,7 +114,7 @@ class _StoreScreenState extends State<StoreScreen> {
                             child: Text('Your orders and receipts (${Orders.all().length})',
                                 style: Theme.of(context).textTheme.titleMedium),
                           ),
-                          const Icon(Icons.chevron_right, color: T.inkMuted),
+                          Icon(Icons.chevron_right, color: context.pal.inkMuted),
                         ]),
                       ),
                     ),
@@ -132,10 +137,10 @@ class _StoreScreenState extends State<StoreScreen> {
                     ),
                   ),
                   for (final p in list)
-                    Padding(
+                    FadeSlideIn(index: list.indexOf(p), child: Padding(
                       padding: const EdgeInsets.fromLTRB(T.s16, 0, T.s16, T.s12),
                       child: ProductCard(p.cast<String, dynamic>()),
-                    ),
+                    )),
                 ],
               ],
             ),
@@ -169,7 +174,7 @@ class ProductCard extends StatelessWidget {
               color: sec.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(T.r16),
             ),
-            child: Icon(categoryIcon('${p['category']}'), size: 36, color: T.ink),
+            child: Icon(categoryIcon('${p['category']}'), size: 36, color: context.pal.ink),
           ),
           const SizedBox(width: T.s16),
           Expanded(
@@ -178,7 +183,7 @@ class ProductCard extends StatelessWidget {
                   style: tt.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: T.s4),
               Text('From ${money(_minPrice(p), cur)}',
-                  style: tt.bodyLarge?.copyWith(fontWeight: T.bold, color: T.ink)),
+                  style: tt.bodyLarge?.copyWith(fontWeight: T.bold, color: context.pal.ink)),
               const SizedBox(height: T.s4),
               if (stock == 0)
                 const StatusPill(Icons.remove_shopping_cart_outlined, 'Sold out', Tone.danger)
@@ -188,7 +193,7 @@ class ProductCard extends StatelessWidget {
                 Text(titleCase('${p['category'] ?? ''}'), style: tt.bodySmall),
             ]),
           ),
-          const Icon(Icons.chevron_right, color: T.inkMuted),
+          Icon(Icons.chevron_right, color: context.pal.inkMuted),
         ]),
       ),
     );
@@ -205,6 +210,7 @@ class ProductScreen extends StatefulWidget {
 class _ProductScreenState extends State<ProductScreen> {
   Map<String, dynamic>? variant;
   int qty = 1;
+  bool _added = false;
 
   late final List<Map<String, dynamic>> variants = (widget.product['variants'] as List? ?? const [])
       .map((e) => Map<String, dynamic>.from(e as Map))
@@ -245,7 +251,7 @@ class _ProductScreenState extends State<ProductScreen> {
               color: sec.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(T.r24),
             ),
-            child: Icon(categoryIcon('${p['category']}'), size: 88, color: T.ink),
+            child: Icon(categoryIcon('${p['category']}'), size: 88, color: context.pal.ink),
           ),
           const SizedBox(height: T.s16),
           Text('${p['name']}', style: tt.titleLarge),
@@ -279,11 +285,11 @@ class _ProductScreenState extends State<ProductScreen> {
           if (variant != null)
             Row(children: [
               Icon(_stock <= 3 ? Icons.local_fire_department_outlined : Icons.inventory_2_outlined,
-                  size: 18, color: _stock <= 3 ? T.warning : T.inkMuted),
+                  size: 18, color: _stock <= 3 ? context.pal.warning : context.pal.inkMuted),
               const SizedBox(width: T.s8),
               Text(_stock <= 3 ? 'Only $_stock left' : '$_stock in stock',
                   style: tt.bodyMedium?.copyWith(
-                      color: _stock <= 3 ? T.warning : T.inkMuted, fontWeight: T.bold)),
+                      color: _stock <= 3 ? context.pal.warning : context.pal.inkMuted, fontWeight: T.bold)),
             ])
           else
             const StatusPill(Icons.remove_shopping_cart_outlined, 'Sold out in every size', Tone.danger),
@@ -313,7 +319,8 @@ class _ProductScreenState extends State<ProductScreen> {
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.fromLTRB(T.s16, T.s12, T.s16, T.s12),
-          decoration: BoxDecoration(color: Colors.white, boxShadow: T.shadow(T.ink)),
+          decoration: BoxDecoration(
+              color: context.pal.card, boxShadow: T.shadow(context.pal.ink, dark: context.pal.isDark)),
           child: Row(children: [
             Expanded(
               flex: 2,
@@ -324,13 +331,25 @@ class _ProductScreenState extends State<ProductScreen> {
                     : () {
                         final ok = svc.cart.add(p, variant!, qty);
                         if (ok) {
+                          setState(() => _added = true);
+                          Future.delayed(const Duration(milliseconds: 1400), () {
+                            if (mounted) setState(() => _added = false);
+                          });
                           showSuccess(context, 'Added to cart: ${p['name']} (${_label(variant!)}) × $qty');
                         } else {
                           showError(context, 'You can\'t add more of this size: the limit is $_max.');
                         }
                       },
-                icon: const Icon(Icons.add_shopping_cart),
-                label: const Text('Add', maxLines: 1),
+                icon: AnimatedSwitcher(
+                  duration: Motion.of(context, Motion.medium),
+                  transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                  child: Icon(_added ? Icons.check_circle : Icons.add_shopping_cart,
+                      key: ValueKey(_added)),
+                ),
+                label: AnimatedSwitcher(
+                  duration: Motion.of(context, Motion.medium),
+                  child: Text(_added ? 'Added' : 'Add', key: ValueKey(_added), maxLines: 1),
+                ),
               ),
             ),
             const SizedBox(width: T.s12),
@@ -547,9 +566,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               hintText: 'Optional, e.g. WELCOME10',
               prefixIcon: const Icon(Icons.local_offer_outlined),
               suffixIcon: _discount
-                  ? const Tooltip(
+                  ? Tooltip(
                       message: 'Code applied',
-                      child: Icon(Icons.check_circle, color: T.success))
+                      child: Icon(Icons.check_circle, color: context.pal.success))
                   : null,
             ),
           ),
@@ -578,13 +597,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: T.s8),
             Container(
               padding: const EdgeInsets.all(T.s12),
-              decoration: BoxDecoration(color: T.dangerBg, borderRadius: BorderRadius.circular(T.r12)),
+              decoration: BoxDecoration(color: context.pal.dangerBg, borderRadius: BorderRadius.circular(T.r12)),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.error_outline, color: T.danger),
+                Icon(Icons.error_outline, color: context.pal.danger),
                 const SizedBox(width: T.s12),
                 Expanded(
                     child: Text(_error!,
-                        style: const TextStyle(color: T.danger, fontWeight: T.bold, fontSize: T.meta))),
+                        style: TextStyle(color: context.pal.danger, fontWeight: T.bold, fontSize: T.meta))),
               ]),
             ),
           ],
@@ -680,7 +699,7 @@ class OrdersScreen extends StatelessWidget {
                             ),
                             Text(money((payload['total_minor'] as num?) ?? 0, '${payload['currency'] ?? 'PKR'}'),
                                 style: tt.titleMedium?.copyWith(fontFeatures: T.tabular)),
-                            const Icon(Icons.chevron_right, color: T.inkMuted),
+                            Icon(Icons.chevron_right, color: context.pal.inkMuted),
                           ]),
                         ),
                       );
@@ -778,15 +797,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> with SingleTickerProvider
       appBar: brandBar(context, 'Receipt'),
       body: Constrained(
         child: ListView(padding: const EdgeInsets.all(T.s16), children: [
-          ScaleTransition(
-            scale: CurvedAnimation(parent: _anim, curve: Curves.elasticOut),
-            child: Container(
-              width: 88,
-              height: 88,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(color: T.successBg, shape: BoxShape.circle),
-              child: const Icon(Icons.check_rounded, size: 56, color: T.success,
-                  semanticLabel: 'Payment successful'),
+          Center(
+            child: Semantics(
+              label: 'Payment successful',
+              image: true,
+              child: AnimatedCheck(
+                  size: 88, color: context.pal.success, background: context.pal.successBg),
             ),
           ),
           const SizedBox(height: T.s16),
@@ -816,7 +832,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> with SingleTickerProvider
               if (receipt['signature'] != null) ...[
                 const SizedBox(height: T.s12),
                 Row(children: [
-                  const Icon(Icons.verified_user_outlined, size: 18, color: T.success),
+                  Icon(Icons.verified_user_outlined, size: 18, color: context.pal.success),
                   const SizedBox(width: T.s8),
                   Expanded(
                     child: Text(
@@ -862,7 +878,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> with SingleTickerProvider
                 style: Theme.of(context)
                     .textTheme
                     .bodyLarge
-                    ?.copyWith(fontWeight: T.bold, color: T.ink, fontFeatures: T.tabular)),
+                    ?.copyWith(fontWeight: T.bold, color: context.pal.ink, fontFeatures: T.tabular)),
           ),
         ]),
       );

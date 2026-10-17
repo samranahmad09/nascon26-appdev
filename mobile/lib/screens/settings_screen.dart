@@ -102,6 +102,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
+          const SectionTitle('Appearance', inset: false),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto), label: Text('System')),
+                ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
+                ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
+              ],
+              selected: {settings.themeMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => svc.settings.setThemeMode(s.first),
+              style: const ButtonStyle(minimumSize: WidgetStatePropertyAll(Size(48, 52))),
+            ),
+          ),
           const SectionTitle('Server address', inset: false),
           Text('On the emulator use http://10.0.2.2:8080. On a phone use the laptop\'s Wi-Fi address, e.g. http://192.168.1.20:8080.',
               style: tt.bodyMedium),
@@ -128,8 +143,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: T.s32),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                foregroundColor: T.danger,
-                side: const BorderSide(color: T.danger, width: 1.5),
+                foregroundColor: context.pal.danger,
+                side: BorderSide(color: context.pal.danger, width: 1.5),
                 minimumSize: const Size.fromHeight(52),
               ),
               onPressed: () async {

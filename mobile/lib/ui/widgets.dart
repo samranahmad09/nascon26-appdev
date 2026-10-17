@@ -9,6 +9,7 @@ import '../core/repo.dart';
 import '../core/storage.dart';
 import '../core/sync.dart';
 import '../screens/queue_screen.dart';
+import 'motion.dart';
 import 'tokens.dart';
 
 enum Tone { success, danger, warning, neutral, brand }
@@ -16,11 +17,14 @@ enum Tone { success, danger, warning, neutral, brand }
 (Color, Color) toneColors(BuildContext context, Tone t) {
   final p = Theme.of(context).colorScheme.primary;
   return switch (t) {
-    Tone.success => (T.success, T.successBg),
-    Tone.danger => (T.danger, T.dangerBg),
-    Tone.warning => (T.warning, T.warningBg),
-    Tone.neutral => (T.neutral, T.neutralBg),
-    Tone.brand => (ensureContrast(p, Colors.white, 5), Color.alphaBlend(p.withValues(alpha: 0.10), Colors.white)),
+    Tone.success => (context.pal.success, context.pal.successBg),
+    Tone.danger => (context.pal.danger, context.pal.dangerBg),
+    Tone.warning => (context.pal.warning, context.pal.warningBg),
+    Tone.neutral => (context.pal.neutral, context.pal.neutralBg),
+    Tone.brand => (
+        ensureContrast(p, context.pal.card, 5),
+        Color.alphaBlend(p.withValues(alpha: context.pal.isDark ? 0.20 : 0.10), context.pal.card)
+      ),
   };
 }
 
@@ -156,11 +160,28 @@ class NetIndicator extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: T.s4),
                 child: Center(
-                  child: Badge(
-                    isLabelVisible: pending > 0,
-                    label: Text('$pending'),
-                    backgroundColor: T.danger,
-                    child: pill,
+                  child: BumpOnChange(
+                    value: pending,
+                    child: Badge(
+                      isLabelVisible: pending > 0,
+                      label: Text('$pending'),
+                      backgroundColor: context.pal.danger,
+                      textColor: onColor(context.pal.danger),
+                      child: AnimatedSwitcher(
+                        duration: Motion.of(context, Motion.medium),
+                        switchInCurve: Motion.curve,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, a) => FadeTransition(
+                          opacity: a,
+                          child: ScaleTransition(
+                              scale: Tween(begin: 0.85, end: 1.0).animate(a), child: child),
+                        ),
+                        child: KeyedSubtree(
+                          key: ValueKey(net.state),
+                          child: net.state == NetState.syncing ? _Pulse(child: pill) : pill,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -170,6 +191,39 @@ class NetIndicator extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Gentle opacity pulse while something is in progress (off with reduced motion).
+class _Pulse extends StatefulWidget {
+  final Widget child;
+  const _Pulse({required this.child});
+  @override
+  State<_Pulse> createState() => _PulseState();
+}
+
+class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (Motion.reduced(context)) {
+      _c.value = 1;
+    } else if (!_c.isAnimating) {
+      _c.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FadeTransition(opacity: Tween(begin: 0.55, end: 1.0).animate(_c), child: widget.child);
 }
 
 /// Standard app bar: tenant badge + title + connection indicator + extra actions.
@@ -396,7 +450,7 @@ class _LoadedViewState extends State<LoadedView> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading && data == null) return LoadingState(widget.loadingText);
+    if (loading && data == null) return SkeletonList(label: widget.loadingText);
     if (error != null && data == null) return ErrorState(error!, _load);
     return RefreshIndicator(
       onRefresh: _load,
@@ -405,9 +459,10 @@ class _LoadedViewState extends State<LoadedView> {
   }
 }
 
-void showSuccess(BuildContext context, String msg) => _snack(context, msg, Icons.check_circle, T.successBg);
-void showError(BuildContext context, String msg) => _snack(context, msg, Icons.error_outline, T.dangerBg);
-void showInfo(BuildContext context, String msg) => _snack(context, msg, Icons.info_outline, Colors.white);
+void showSuccess(BuildContext context, String msg) => _snack(context, msg, Icons.check_circle, context.pal.successBg);
+void showError(BuildContext context, String msg) => _snack(context, msg, Icons.error_outline, context.pal.dangerBg);
+void showInfo(BuildContext context, String msg) =>
+    _snack(context, msg, Icons.info_outline, context.pal.onSnack);
 
 void _snack(BuildContext context, String msg, IconData icon, Color iconColor) {
   final m = ScaffoldMessenger.maybeOf(context);
@@ -432,14 +487,14 @@ Future<bool> confirm(BuildContext context,
   final r = await showDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
-      icon: Icon(icon, color: danger ? T.danger : Theme.of(c).colorScheme.primary, size: 32),
+      icon: Icon(icon, color: danger ? context.pal.danger : Theme.of(c).colorScheme.primary, size: 32),
       title: Text(title, textAlign: TextAlign.center),
       content: Text(message),
       actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
         FilledButton(
-          style: danger ? FilledButton.styleFrom(backgroundColor: T.danger) : null,
+          style: danger ? FilledButton.styleFrom(backgroundColor: context.pal.danger) : null,
           onPressed: () => Navigator.pop(c, true),
           child: Text(confirmLabel),
         ),
@@ -483,7 +538,7 @@ class SoftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Theme.of(context).colorScheme.primary;
     final content = Material(
-      color: Colors.white,
+      color: context.pal.card,
       borderRadius: BorderRadius.circular(T.r16),
       child: InkWell(
         borderRadius: BorderRadius.circular(T.r16),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/net.dart';
 import '../core/storage.dart';
 import '../core/sync.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 
@@ -83,13 +84,13 @@ class QueueScreen extends StatelessWidget {
             const SizedBox(height: T.s12),
             Container(
               padding: const EdgeInsets.all(T.s12),
-              decoration: BoxDecoration(color: T.dangerBg, borderRadius: BorderRadius.circular(T.r12)),
+              decoration: BoxDecoration(color: context.pal.dangerBg, borderRadius: BorderRadius.circular(T.r12)),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.error_outline, color: T.danger),
+                Icon(Icons.error_outline, color: context.pal.danger),
                 const SizedBox(width: T.s12),
                 Expanded(
                   child: Text("Last sync didn't finish. ${q.lastError!}",
-                      style: const TextStyle(color: T.danger, fontWeight: T.bold, fontSize: T.meta)),
+                      style: TextStyle(color: context.pal.danger, fontWeight: T.bold, fontSize: T.meta)),
                 ),
               ]),
             ),
@@ -150,7 +151,7 @@ class QueueScreen extends StatelessWidget {
             ]),
             const SizedBox(height: T.s12),
             for (final r in results)
-              Padding(
+              FadeSlideIn(index: results.indexOf(r), child: Padding(
                 padding: const EdgeInsets.only(bottom: T.s8),
                 child: SoftCard(
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -161,10 +162,10 @@ class QueueScreen extends StatelessWidget {
                               ? Icons.cancel
                               : Icons.content_copy,
                       color: r.status == 'applied'
-                          ? T.success
+                          ? context.pal.success
                           : r.status == 'rejected'
-                              ? T.danger
-                              : T.neutral,
+                              ? context.pal.danger
+                              : context.pal.neutral,
                     ),
                     const SizedBox(width: T.s12),
                     Expanded(
@@ -179,7 +180,7 @@ class QueueScreen extends StatelessWidget {
                     ),
                   ]),
                 ),
-              ),
+              )),
           ],
           const SizedBox(height: T.s16),
           Text('Device ID: ${settings.deviceId}', style: tt.bodySmall),

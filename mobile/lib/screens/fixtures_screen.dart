@@ -5,6 +5,7 @@ import '../app.dart';
 import '../core/cart.dart';
 import '../core/repo.dart';
 import '../core/storage.dart';
+import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'home_shell.dart';
@@ -48,6 +49,7 @@ class FixturesScreen extends StatelessWidget {
           final matches = (loaded.data['matches'] as List? ?? const []).cast<Map>();
           final live = matches.where((m) => m['status'] == 'in_progress').toList();
           final byRound = <String, List<Map>>{};
+          var n = 0; // stagger order
           for (final m in matches) {
             if (m['status'] == 'in_progress') continue; // shown under "Live now"
             byRound.putIfAbsent('${m['round'] ?? '-'}', () => []).add(m);
@@ -79,11 +81,11 @@ class FixturesScreen extends StatelessWidget {
                 else ...[
                   if (live.isNotEmpty) ...[
                     const SectionTitle('Live now'),
-                    for (final m in live) _pad(MatchCard(m)),
+                    for (final m in live) _pad(FadeSlideIn(index: n++, child: MatchCard(m))),
                   ],
                   for (final e in byRound.entries) ...[
                     SectionTitle(e.key == '-' ? 'Matches' : 'Round ${e.key}'),
-                    for (final m in e.value) _pad(MatchCard(m)),
+                    for (final m in e.value) _pad(FadeSlideIn(index: n++, child: MatchCard(m))),
                   ],
                 ],
               ],
@@ -121,7 +123,7 @@ class MatchCard extends StatelessWidget {
           Row(children: [
             Expanded(
               child: Row(children: [
-                const Icon(Icons.schedule, size: 16, color: T.inkMuted),
+                Icon(Icons.schedule, size: 16, color: context.pal.inkMuted),
                 const SizedBox(width: T.s4),
                 Flexible(
                   child: Text(when(m['scheduled_at'] as String?),
@@ -133,19 +135,42 @@ class MatchCard extends StatelessWidget {
             matchStatusPill(status),
           ]),
           const SizedBox(height: T.s12),
-          _TeamLine('${home['name'] ?? 'Home'}', showScore ? '${m['home_score']}' : null),
-          const SizedBox(height: T.s8),
-          _TeamLine('${away['name'] ?? 'Away'}', showScore ? '${m['away_score']}' : null),
+          Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${home['name'] ?? 'Home'}',
+                    style: tt.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: T.s8),
+                Text('${away['name'] ?? 'Away'}',
+                    style: tt.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ]),
+            ),
+            if (showScore)
+              Hero(
+                tag: 'score-${m['match_id']}',
+                flightShuttleBuilder: scoreFlight,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('${m['home_score']}',
+                        style: tt.titleLarge?.copyWith(fontFeatures: T.tabular, height: 1.04)),
+                    const SizedBox(height: T.s8),
+                    Text('${m['away_score']}',
+                        style: tt.titleLarge?.copyWith(fontFeatures: T.tabular, height: 1.04)),
+                  ]),
+                ),
+              ),
+          ]),
           if ((m['venue'] ?? '').toString().isNotEmpty) ...[
             const SizedBox(height: T.s12),
             Row(children: [
-              const Icon(Icons.place_outlined, size: 16, color: T.inkMuted),
+              Icon(Icons.place_outlined, size: 16, color: context.pal.inkMuted),
               const SizedBox(width: T.s4),
               Expanded(
                 child: Text('${m['venue']}',
                     style: tt.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
-              const Icon(Icons.chevron_right, color: T.inkMuted),
+              Icon(Icons.chevron_right, color: context.pal.inkMuted),
             ]),
           ],
         ]),
