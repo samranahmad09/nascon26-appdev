@@ -185,7 +185,7 @@ def test_transfer_validation(fresh):
     assert fields(move(fresh, type="loan", loan_end_date="2026-09-30")) == ["loan_end_date"]
     assert fields(move(fresh, type="loan", loan_end_date="2026-09-29")) == ["loan_end_date"]
     assert fields(move(fresh, request_id="")) == ["request_id"]
-    assert fields(move(fresh, player_id=7, requested_by=None)) == ["player_id", "requested_by"]
+    assert fields(move(fresh, player_id=7, requested_by=5)) == ["player_id", "requested_by"]
     assert fields(move(fresh, reason=5)) == ["reason"]
     assert fields(move(fresh, type="release", to_squad_id=12)) == ["to_squad_id"]
     assert fields(fresh.post("/audit/v1/roster/transfer", json=["x"])) == ["body"]
@@ -267,7 +267,7 @@ def test_loan_rules_and_auto_return(fresh):
     assert without_when(after["history"][1]) == {
         "audit_id": "au-0002", "action": "loan_return", "player_id": "p2", "league_id": "lg-r1",
         "from_squad_id": "sq-b", "to_squad_id": "sq-a", "effective_date": "2026-09-21", "state": "active",
-        "who": "system", "why": "Loan period ended"}
+        "who": "system", "why": None}
     # written once, never duplicated
     assert history(fresh, "p2", "2027-01-05").json()["history"] == after["history"]
     assert history(fresh, "p2").json()["history"] == after["history"]
@@ -337,6 +337,21 @@ def test_min_position(fresh):
     # SQUAD_FULL is checked before MIN_POSITION_VIOLATION
     make_league(fresh, league={"max_squad_size": 0})
     error(move(fresh, player_id="p1"), 409, "SQUAD_FULL")
+
+
+def test_reason_and_requested_by_are_optional(fresh):
+    make_league(fresh)
+    body = {k: v for k, v in MOVE.items() if k not in ("reason", "requested_by")}
+    r = fresh.post("/audit/v1/roster/transfer", json=body)
+    assert r.status_code == 201, r.text
+    assert r.json()["audit_entry"]["who"] is None and r.json()["audit_entry"]["why"] is None
+    r = move(fresh, request_id="tr-2", from_squad_id="sq-b", type="release", to_squad_id=None, reason=None,
+             requested_by=None, effective_date="2026-12-01")
+    assert r.status_code == 201, r.text
+    assert r.json()["audit_entry"]["who"] is None and r.json()["audit_entry"]["why"] is None
+    r = move(fresh, request_id="tr-3", player_id="p1", type="loan", loan_end_date="2026-12-31", reason="",
+             requested_by="")
+    error(r, 409, "MIN_POSITION_VIOLATION")
 
 
 def test_release(fresh):
