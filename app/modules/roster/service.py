@@ -6,12 +6,15 @@ ended and the player is back with the lender. The return is written once to the 
 entry (who "system", effective the day after loan_end_date) by the first history read whose as_of, or the
 first accepted change of that player whose effective_date, is past the loan end.
 
+Stored entries and responses are JSON (not JSONB) so a replay is byte-identical.
 Audit ids are numbered per league ("au-0001" is the first entry after a setup); re-sending a setup replaces
 the league's whole roster state, including its audit trail and stored requests. Idempotency is keyed by
 (league_id, request_id): any reuse of an accepted request_id returns the stored response with HTTP 200.
 """
 import datetime as dt
 import logging
+
+from psycopg.types.json import Json
 
 from ...core import queue, realtime
 from ...core.db import Jsonb
@@ -48,10 +51,10 @@ CREATE TABLE IF NOT EXISTS ro_matches (
     PRIMARY KEY (league_id, match_id));
 CREATE TABLE IF NOT EXISTS ro_audit (
     seq BIGSERIAL PRIMARY KEY, league_id TEXT NOT NULL, player_id TEXT NOT NULL, action TEXT NOT NULL,
-    from_squad_id TEXT, to_squad_id TEXT, effective_date DATE NOT NULL, loan_end_date DATE, entry JSONB NOT NULL);
+    from_squad_id TEXT, to_squad_id TEXT, effective_date DATE NOT NULL, loan_end_date DATE, entry JSON NOT NULL);
 CREATE INDEX IF NOT EXISTS ro_audit_player ON ro_audit (league_id, player_id, seq);
 CREATE TABLE IF NOT EXISTS ro_requests (
-    league_id TEXT NOT NULL, request_id TEXT NOT NULL, body JSONB NOT NULL, response JSONB NOT NULL,
+    league_id TEXT NOT NULL, request_id TEXT NOT NULL, body JSONB NOT NULL, response JSON NOT NULL,
     PRIMARY KEY (league_id, request_id));
 """
 
@@ -311,7 +314,7 @@ def _append(conn, league_id: str, player_id: str, action: str, from_squad, to_sq
              "state": state, "who": who, "when": utc_now(), "why": why}
     conn.execute("INSERT INTO ro_audit (league_id, player_id, action, from_squad_id, to_squad_id, effective_date, "
                  "loan_end_date, entry) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                 (league_id, player_id, action, from_squad, to_squad, effective, loan_end, Jsonb(entry)))
+                 (league_id, player_id, action, from_squad, to_squad, effective, loan_end, Json(entry)))
     queue.emit("roster." + action, entry)
     realtime.publish("roster:" + league_id, {"type": "roster_change", "data": entry})
     return entry
@@ -483,7 +486,7 @@ def transfer(conn, body, before_rules=None) -> tuple[int, dict]:
     response = {"request_id": req["request_id"], "status": "accepted", "state": outcome,
                 "blocking_match_id": blocking, "registration": registration, "audit_entry": entry}
     conn.execute("INSERT INTO ro_requests (league_id, request_id, body, response) VALUES (%s, %s, %s, %s)",
-                 (lid, req["request_id"], Jsonb(body), Jsonb(response)))
+                 (lid, req["request_id"], Jsonb(body), Json(response)))
     return 201, response
 
 

@@ -155,7 +155,7 @@ def test_transfer_exact_response_and_replay(fresh):
         "from_squad_id": "sq-a", "to_squad_id": "sq-b", "effective_date": "2026-09-30", "state": "active",
         "who": "user-77", "why": "Tactical move"}
     replay = move(fresh)
-    assert replay.status_code == 200 and replay.json() == body
+    assert replay.status_code == 200 and replay.content == r.content
     # a reused request_id returns the stored outcome and changes nothing
     again = move(fresh, to_squad_id="sq-a", from_squad_id="sq-b")
     assert again.status_code == 200 and again.json() == body
