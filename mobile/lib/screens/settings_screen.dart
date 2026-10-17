@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
-          const SectionTitle('Server address'),
+          const SectionTitle('Server address', inset: false),
           Text('On the emulator use http://10.0.2.2:8080. On a phone use the laptop\'s Wi-Fi address, e.g. http://192.168.1.20:8080.',
               style: tt.bodyMedium),
           const SizedBox(height: T.s12),
@@ -122,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 : const Icon(Icons.save_outlined),
             label: Text(_testing ? 'Checking the server…' : 'Save and test connection'),
           ),
-          const SectionTitle('Data'),
+          const SectionTitle('Data', inset: false),
           SoftCard(
             padding: EdgeInsets.zero,
             child: SwitchListTile(

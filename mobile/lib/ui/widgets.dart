@@ -452,10 +452,11 @@ Future<bool> confirm(BuildContext context,
 class SectionTitle extends StatelessWidget {
   final String text;
   final Widget? trailing;
-  const SectionTitle(this.text, {super.key, this.trailing});
+  final bool inset; // false inside lists that already have side padding
+  const SectionTitle(this.text, {super.key, this.trailing, this.inset = true});
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(T.s16, T.s24, T.s16, T.s8),
+        padding: EdgeInsets.fromLTRB(inset ? T.s16 : 0, T.s24, inset ? T.s16 : 0, T.s8),
         child: Row(children: [
           Expanded(
               child: Semantics(

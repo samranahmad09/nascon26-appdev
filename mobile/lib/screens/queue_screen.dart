@@ -94,7 +94,7 @@ class QueueScreen extends StatelessWidget {
               ]),
             ),
           ],
-          SectionTitle('Waiting to sync', trailing: Text('${pending.length}', style: tt.bodySmall)),
+          SectionTitle('Waiting to sync', inset: false, trailing: Text('${pending.length}', style: tt.bodySmall)),
           if (pending.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: T.s8),
@@ -136,7 +136,7 @@ class QueueScreen extends StatelessWidget {
                 ),
               ),
           if (results.isNotEmpty) ...[
-            SectionTitle('Last sync results',
+            SectionTitle('Last sync results', inset: false,
                 trailing: TextButton(onPressed: q.clearResults, child: const Text('Clear'))),
             if (q.lastSyncAt != null)
               Padding(

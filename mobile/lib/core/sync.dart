@@ -18,6 +18,10 @@ String utcStamp([DateTime? t]) {
 
 String newId(String prefix) => '$prefix-${const Uuid().v4()}';
 
+/// Short, still unique enough for one event (48 random bits); used where people read it.
+String shortId(String prefix) =>
+    '$prefix-${const Uuid().v4().replaceAll('-', '').substring(0, 12)}';
+
 /// One queued offline action. `action` is exactly the Section 5.14 format.
 class QueuedAction {
   final Map<String, dynamic> action;

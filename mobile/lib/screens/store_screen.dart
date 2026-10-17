@@ -184,8 +184,8 @@ class _ProductScreenState extends State<ProductScreen> {
   Map<String, dynamic>? variant;
   int qty = 1;
 
-  List<Map<String, dynamic>> get variants => (widget.product['variants'] as List? ?? const [])
-      .map((e) => (e as Map).cast<String, dynamic>())
+  late final List<Map<String, dynamic>> variants = (widget.product['variants'] as List? ?? const [])
+      .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
 
   @override
@@ -231,12 +231,12 @@ class _ProductScreenState extends State<ProductScreen> {
             const SizedBox(height: T.s8),
             Text('${p['description']}', style: tt.bodyLarge),
           ],
-          const SectionTitle('Choose a size'),
+          const SectionTitle('Choose a size', inset: false),
           Wrap(spacing: T.s8, runSpacing: T.s8, children: [
             for (final v in variants)
               Builder(builder: (context) {
                 final s = (v['stock'] as num?)?.toInt() ?? 0;
-                final selected = identical(v, variant);
+                final selected = variant != null && v['variant_id'] == variant!['variant_id'];
                 return ChoiceChip(
                   label: Text(s == 0 ? '${_label(v)} · Sold out' : _label(v)),
                   selected: selected,
@@ -263,7 +263,7 @@ class _ProductScreenState extends State<ProductScreen> {
             ])
           else
             const StatusPill(Icons.remove_shopping_cart_outlined, 'Sold out in every size', Tone.danger),
-          const SectionTitle('Quantity'),
+          const SectionTitle('Quantity', inset: false),
           Row(children: [
             IconButton.outlined(
               tooltip: 'One less',
@@ -445,7 +445,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _busy = true;
       _error = null;
     });
-    final orderId = newId('ord');
+    final orderId = shortId('ord');
     final code = _code.text.trim();
     try {
       final res = await svc.api.post('/audit/v1/checkout', {
@@ -463,9 +463,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
           builder: (_) => ReceiptScreen(order: res, lines: widget.lines)));
     } on ApiException catch (e) {
-      setState(() => _error = e.code == 'OUT_OF_STOCK'
+      final msg = e.code == 'OUT_OF_STOCK'
           ? 'Sorry, ${_variantName(e.details['variant_id'])} just sold out. Nothing was charged. Choose another size.'
-          : e.message);
+          : e.message;
+      setState(() => _error = msg);
+      if (mounted) showError(context, msg);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -510,7 +512,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ]),
             ]),
           ),
-          const SectionTitle('Discount code'),
+          const SectionTitle('Discount code', inset: false),
           TextField(
             controller: _code,
             textCapitalization: TextCapitalization.characters,
@@ -525,7 +527,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   : null,
             ),
           ),
-          const SectionTitle('Pay with (test cards)'),
+          const SectionTitle('Pay with (test cards)', inset: false),
           RadioGroup<String>(
             groupValue: token,
             onChanged: (v) => setState(() => token = v ?? token),
