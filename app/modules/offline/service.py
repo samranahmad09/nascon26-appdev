@@ -169,7 +169,8 @@ def _process(conn, device_id: str, action: dict) -> dict:
                         (device_id, action["action_id"])).fetchone()
     handler = HANDLERS[action["type"]]
     try:
-        result = handler(conn, action, seen is not None)
+        with conn.transaction():
+            result = handler(conn, action, seen is not None)
     except Exception:
         log.exception("offline action %s/%s failed", device_id, action["action_id"])
         result = _rejected("VALIDATION_ERROR", 0)
