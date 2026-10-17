@@ -119,11 +119,6 @@
         "legal_ball": true,
         "wicket": false
       },
-      "three": {
-        "runs": 3,
-        "legal_ball": true,
-        "wicket": false
-      },
       "noball": {
         "runs": 1,
         "legal_ball": false,
@@ -154,9 +149,6 @@
         "rounds": 1
       },
       "round": {
-        "rounds": 1
-      },
-      "map_win": {
         "rounds": 1
       }
     },
