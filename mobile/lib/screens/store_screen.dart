@@ -624,7 +624,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> with SingleTickerProvider
       showError(context, 'The server didn\'t include a PDF for this receipt.');
       return null;
     }
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await getTemporaryDirectory();
     final f = File('${dir.path}/receipt-$orderId.pdf');
     await f.writeAsBytes(base64Decode(b64), flush: true);
     return f;

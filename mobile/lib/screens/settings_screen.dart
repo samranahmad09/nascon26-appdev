@@ -37,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await svc.settings.setBaseUrl(_url.text);
     _url.text = svc.settings.baseUrl;
     await svc.net.probe();
+    svc.repo.bump();
     if (!mounted) return;
     setState(() => _testing = false);
     if (ok) {

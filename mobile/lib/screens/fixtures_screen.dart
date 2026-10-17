@@ -49,6 +49,7 @@ class FixturesScreen extends StatelessWidget {
           final live = matches.where((m) => m['status'] == 'in_progress').toList();
           final byRound = <String, List<Map>>{};
           for (final m in matches) {
+            if (m['status'] == 'in_progress') continue; // shown under "Live now"
             byRound.putIfAbsent('${m['round'] ?? '-'}', () => []).add(m);
           }
           return Constrained(

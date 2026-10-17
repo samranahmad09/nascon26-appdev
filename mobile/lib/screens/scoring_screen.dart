@@ -25,6 +25,14 @@ List<String> scoringTypes(Map m) {
   return const [];
 }
 
+/// "Goal +1", "Six +6", "Wicket" from the sport's scoring_events config.
+String scoringLabel(Map m, String type) {
+  final se = m['scoring_events'];
+  final cfg = se is Map ? se[type] : null;
+  final v = cfg is Map ? (cfg['points'] ?? cfg['runs'] ?? cfg['rounds']) : null;
+  return v is num && v > 0 ? '${titleCase(type)} +$v' : titleCase(type);
+}
+
 /// Organizer: pick a match, then add a score or cancel an earlier event.
 class ScoringScreen extends StatelessWidget {
   final bool standalone;
@@ -301,7 +309,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
           DataBanner(loaded!),
           Padding(
             padding: const EdgeInsets.fromLTRB(T.s16, T.s12, T.s16, 0),
-            child: ScoreHeader(m: m, names: names, live: false),
+            child: ScoreHeader(m: m, names: names, live: false, showLive: false),
           ),
           if (status == 'upcoming')
             Padding(
@@ -341,7 +349,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen> {
                         style: FilledButton.styleFrom(minimumSize: const Size(120, 52)),
                         onPressed: busy ? null : () => _score(t),
                         icon: const Icon(Icons.add),
-                        label: Text(titleCase(t)),
+                        label: Text(scoringLabel(m, t)),
                       ),
                   ]),
           ),

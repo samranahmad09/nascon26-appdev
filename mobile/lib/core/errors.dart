@@ -83,6 +83,9 @@ const Map<String, String> _messages = {
   'LEAGUE_NOT_FOUND': 'That league doesn\'t exist on the server.',
   'PLAYER_NOT_FOUND': 'That player doesn\'t exist on the server.',
   'SQUAD_NOT_FOUND': 'That squad doesn\'t exist on the server.',
+  'CLUB_NOT_FOUND': 'That club doesn\'t exist on the server.',
+  'TENANT_NOT_FOUND': 'That organisation doesn\'t exist on the server.',
+  'RECEIPT_NOT_AVAILABLE': 'This order has no receipt because it was not paid.',
   'CROSS_TENANT_TRANSFER':
       'Players can only move between clubs of the same organisation.',
   'NOT_IN_SQUAD':

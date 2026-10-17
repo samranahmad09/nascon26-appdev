@@ -247,7 +247,9 @@ class ScoreHeader extends StatelessWidget {
   final Map m;
   final Map<String, String> names;
   final bool live;
-  const ScoreHeader({super.key, required this.m, required this.names, required this.live});
+  final bool showLive;
+  const ScoreHeader(
+      {super.key, required this.m, required this.names, required this.live, this.showLive = true});
 
   @override
   Widget build(BuildContext context) {
@@ -302,9 +304,10 @@ class ScoreHeader extends StatelessWidget {
                           ? 'Full time'
                           : 'Upcoming',
                 ),
-                _HeaderChip(
-                    icon: live ? Icons.bolt : Icons.bolt_outlined,
-                    text: live ? 'Real-time updates on' : 'Updates paused'),
+                if (showLive)
+                  _HeaderChip(
+                      icon: live ? Icons.bolt : Icons.bolt_outlined,
+                      text: live ? 'Real-time updates on' : 'Updates paused'),
               ],
             ),
             const SizedBox(height: T.s16),

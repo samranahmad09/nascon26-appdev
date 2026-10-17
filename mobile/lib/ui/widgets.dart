@@ -175,7 +175,7 @@ class NetIndicator extends StatelessWidget {
 /// Standard app bar: tenant badge + title + connection indicator + extra actions.
 PreferredSizeWidget brandBar(BuildContext context, String title,
     {List<Widget> actions = const [], bool showBadge = true}) {
-  final canPop = Navigator.of(context).canPop();
+  final canPop = ModalRoute.of(context)?.canPop ?? false;
   return AppBar(
     titleSpacing: canPop ? 0 : T.s16,
     title: Row(children: [
