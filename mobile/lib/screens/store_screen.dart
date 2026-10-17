@@ -20,7 +20,10 @@ import 'home_shell.dart';
 
 IconData categoryIcon(String c) {
   final s = c.toLowerCase();
-  if (s.contains('jersey') || s.contains('shirt') || s.contains('kit')) return Icons.checkroom;
+  if (s.contains('jersey') || s.contains('shirt') || s.contains('kit') || s.contains('apparel')) {
+    return Icons.checkroom;
+  }
+  if (s.contains('digital') || s.contains('wallpaper')) return Icons.wallpaper;
   if (s.contains('ball')) return Icons.sports_soccer;
   if (s.contains('cap') || s.contains('hat')) return Icons.face_retouching_natural;
   if (s.contains('ticket')) return Icons.confirmation_number_outlined;
@@ -120,7 +123,7 @@ class _StoreScreenState extends State<StoreScreen> {
                           Padding(
                             padding: const EdgeInsets.only(right: T.s8),
                             child: ChoiceChip(
-                              label: Text(c),
+                              label: Text(c == 'All' ? c : titleCase(c)),
                               selected: category == c,
                               onSelected: (_) => setState(() => category = c),
                             ),
@@ -182,7 +185,7 @@ class ProductCard extends StatelessWidget {
               else if (stock <= 3)
                 StatusPill(Icons.local_fire_department_outlined, 'Only $stock left', Tone.warning)
               else
-                Text('${p['category'] ?? ''}', style: tt.bodySmall),
+                Text(titleCase('${p['category'] ?? ''}'), style: tt.bodySmall),
             ]),
           ),
           const Icon(Icons.chevron_right, color: T.inkMuted),
@@ -216,7 +219,9 @@ class _ProductScreenState extends State<ProductScreen> {
 
   String _label(Map v) {
     final multiColor = variants.map((e) => e['color']).toSet().length > 1;
-    final parts = [v['size'], if (multiColor) v['color']].where((e) => e != null);
+    final parts = [v['size'], if (multiColor) v['color']]
+        .where((e) => e != null && '$e'.isNotEmpty)
+        .map((e) => titleCase('$e'));
     return parts.join(' · ');
   }
 

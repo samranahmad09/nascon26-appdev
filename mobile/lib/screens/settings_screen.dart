@@ -122,18 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 : const Icon(Icons.save_outlined),
             label: Text(_testing ? 'Checking the server…' : 'Save and test connection'),
           ),
-          const SectionTitle('Data', inset: false),
-          SoftCard(
-            padding: EdgeInsets.zero,
-            child: SwitchListTile(
-              value: settings.useSampleData,
-              onChanged: svc.settings.setUseSampleData,
-              title: const Text('Use sample data for missing features'),
-              subtitle: const Text(
-                  'Only when the server has no such screen yet. Sample screens are clearly labelled.'),
-            ),
-          ),
-          const SizedBox(height: T.s8),
+          const SizedBox(height: T.s16),
           Text('Device ID: ${settings.deviceId}', style: tt.bodySmall),
           if (session.loggedIn) ...[
             const SizedBox(height: T.s32),
