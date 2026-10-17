@@ -6,6 +6,9 @@ the resource, so tenant isolation is absolute: every non-"any" scope first requi
 Authorization runs before anything else about a request; an id that does not exist cannot belong to the
 caller, so non-super-admins get 403 for it and only a platform-wide grant can reach the 404.
 """
+import base64
+import binascii
+
 from fastapi import Request
 
 from ...core import db
@@ -69,9 +72,27 @@ def load_resource(kind: str, resource_id) -> dict | None:
     return db.fetchone(LOADERS[kind][0], (resource_id,))
 
 
+def _canonical_b64url(segment: str) -> bool:
+    try:
+        raw = base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+    except (binascii.Error, ValueError):
+        return False
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii") == segment
+
+
+def claims_of(request: Request) -> dict:
+    """bearer_claims plus a strict encoding check: base64 decoders ignore the spare low bits of the last
+    character, so a signature altered only there would otherwise still verify."""
+    _, _, token = request.headers.get("authorization", "").partition(" ")
+    segments = token.strip().split(".")
+    if len(segments) == 3 and not all(_canonical_b64url(s) for s in segments):
+        raise ApiError(401, "UNAUTHENTICATED", "Token is missing, invalid or expired.")
+    return bearer_claims(request)
+
+
 def authorize(request: Request, action: str, resource_id: str | None = None) -> dict:
     """401 for a bad token, 403 when the policy denies, 404 only for a missing id behind an "any" grant."""
-    claims = bearer_claims(request)
+    claims = claims_of(request)
     kind, _ = POLICY[action]
     resource = load_resource(kind, resource_id) if kind else None
     if not is_allowed(claims, action, resource):

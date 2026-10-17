@@ -103,6 +103,11 @@ def test_twenty_simultaneous_buyers_for_the_last_unit(fresh):
     assert inventory(fresh, M) == {"variant_id": M, "stock": 0, "reserved": 0}
     winner = next(r for r in results if r.status_code == 201).json()
     assert winner["payment"] == {"authorization_id": "auth_1", "capture_id": "cap_1", "state": "captured"}
+    # replaying the winner is answered from storage even though no stock is left
+    i = int(winner["order_id"].split("-")[1])
+    replay = fresh.post("/audit/v1/checkout", json=order(winner["order_id"], customer=f"cust-{i}"))
+    assert replay.status_code == 200 and replay.json() == winner
+    assert inventory(fresh, M) == {"variant_id": M, "stock": 0, "reserved": 0}
 
 
 def test_burst_never_oversells_when_several_units_remain(fresh):
@@ -371,3 +376,18 @@ def test_money_format():
     assert receipt.money(450000) == "PKR 4500.00"
     assert receipt.money(5) == "PKR 0.05"
     assert receipt.money(123456789) == "PKR 1234567.89"
+
+
+def test_lone_surrogate_or_nul_text_is_400_not_500(fresh):
+    raw = (rb'{"order_id": "ord-sur", "customer_id": "bad\ud800", "items": [{"variant_id": "var-jersey-001-M", '
+           rb'"quantity": 1}], "discount_code": "\u0000", "payment": {"token": "tok_\udfff"}}')
+    r = fresh.post("/audit/v1/checkout", content=raw, headers={"content-type": "application/json"})
+    assert assert_error(r, 400, "VALIDATION_ERROR")["details"]["fields"] == ["customer_id", "discount_code", "payment"]
+
+
+def test_catalog_lookup_of_unknown_products():
+    from app.modules.store import catalog
+    with db.tx() as conn:
+        assert catalog.product_payload(conn, "prod-ghost") is None
+        assert catalog.product_payload(conn, "bad|id") is None
+        assert catalog.product_payload(conn, "prod-wallpaper-001")["variants"][0]["color"] is None

@@ -130,9 +130,17 @@ def _replay(row: dict, fingerprint: str, order_id: str):
 
 
 def _claim_and_reserve(req: dict, priced: dict, fingerprint: str):
-    """One transaction: claim the order id, then reserve every line or nothing. Returns a stored row on conflict."""
+    """One transaction: lock the variants, claim the order id, then reserve every line or nothing.
+
+    Locks are taken variants-then-orders, the same table order /audit/v1/reset truncates in. The id claim is
+    checked before stock so an identical replay of a paid order is answered even when stock is now zero.
+    Returns the stored order row when the id is already taken.
+    """
     now = utc_now()
+    wanted = {line["variant_id"]: line["quantity"] for line in priced["lines"]}
     with db.tx() as conn:
+        locked = conn.execute("SELECT variant_id, stock FROM st_variants WHERE variant_id = ANY(%s) "
+                              "ORDER BY variant_id FOR UPDATE", (sorted(wanted),)).fetchall()
         claimed = conn.execute(
             "INSERT INTO st_orders (order_id, fingerprint, customer_id, tenant_id, status, items, total_minor, "
             "created_at, updated_at) VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s) "
@@ -142,9 +150,6 @@ def _claim_and_reserve(req: dict, priced: dict, fingerprint: str):
         if claimed is None:
             return conn.execute("SELECT fingerprint, status, http_status, response FROM st_orders WHERE order_id = %s",
                                 (req["order_id"],)).fetchone()
-        wanted = {line["variant_id"]: line["quantity"] for line in priced["lines"]}
-        locked = conn.execute("SELECT variant_id, stock FROM st_variants WHERE variant_id = ANY(%s) "
-                              "ORDER BY variant_id FOR UPDATE", (sorted(wanted),)).fetchall()
         stock = {r["variant_id"]: r["stock"] for r in locked}
         for line in priced["lines"]:
             if stock.get(line["variant_id"], 0) < line["quantity"]:

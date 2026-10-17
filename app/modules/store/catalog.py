@@ -127,13 +127,6 @@ def list_products(conn, tenant_id: str | None) -> list[dict]:
     return _products(conn, "WHERE tenant_id = %s", (tenant_id,))
 
 
-def product_row(conn, product_id) -> dict | None:
-    if not is_id(product_id):
-        return None
-    return conn.execute("SELECT product_id, tenant_id, club_id FROM st_products WHERE product_id = %s",
-                        (product_id,)).fetchone()
-
-
 def product_payload(conn, product_id: str) -> dict | None:
     if not is_id(product_id):
         return None

@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
 from ...core import db, realtime
-from ...core.auth import bearer_claims
 from ...core.errors import ApiError, validation_error
 from ...core.validate import is_id, json_body
-from ..rbac.policy import authorize
+from ..rbac.policy import authorize, claims_of
 from . import catalog, service
 
 router = APIRouter()
@@ -26,7 +25,7 @@ def inventory(variant_id: str):
 
 @router.get("/api/v1/products")
 def products(request: Request, category: str | None = None):
-    claims = bearer_claims(request)
+    claims = claims_of(request)
     with db.tx() as conn:
         found = catalog.list_products(conn, claims.get("tenant_id"))
     if category is not None:
@@ -36,7 +35,7 @@ def products(request: Request, category: str | None = None):
 
 @router.post("/api/v1/checkout")
 def app_checkout(request: Request, body=Depends(json_body)):
-    claims = bearer_claims(request)
+    claims = claims_of(request)
     if isinstance(body, dict) and body.get("customer_id") is None:
         body = {**body, "customer_id": claims["sub"]}
     status, result = service.checkout(body)
@@ -77,7 +76,7 @@ def order_status(order_id: str, request: Request, body=Depends(json_body)):
 
 @router.get("/api/v1/matches/{match_id}/pinned-product")
 def get_pinned(match_id: str, request: Request):
-    bearer_claims(request)
+    claims_of(request)
     with db.tx() as conn:
         product = service.pinned_product(conn, match_id)
     return {"match_id": match_id, "product": product}
@@ -85,7 +84,7 @@ def get_pinned(match_id: str, request: Request):
 
 @router.post("/api/v1/matches/{match_id}/pinned-product")
 def pin_product(match_id: str, request: Request, body=Depends(json_body)):
-    claims = bearer_claims(request)
+    claims = claims_of(request)
     if not isinstance(body, dict) or "product_id" not in body:
         raise validation_error(["product_id"])
     product_id = body["product_id"]

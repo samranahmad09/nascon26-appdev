@@ -315,3 +315,22 @@ def test_token_round_trip_and_demo_login(client):
     r = client.post("/api/v1/auth/login", json={"email": "manager@nascon.test", "password": "Nascon@26"})
     assert r.status_code == 200
     assert auth.decode_token(r.json()["token"])["club_id"] == "club-alpha-1"
+
+
+B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+
+def test_signature_altered_only_in_its_spare_bits_is_401(client, matrix):
+    good = matrix["tokens"]["super_admin"]
+    head, body, sig = good.split(".")
+    idx = B64URL.index(sig[-1])
+    siblings = [B64URL[(idx // 4) * 4 + k] for k in range(4) if (idx // 4) * 4 + k != idx]
+    for ch in siblings:  # same decoded bytes as the original signature, different text
+        r = client.get("/audit/v1/rbac/platform/config", headers=bearer(f"{head}.{body}.{sig[:-1]}{ch}"))
+        assert r.status_code == 401 and r.json()["error"]["code"] == "UNAUTHENTICATED"
+    for bad_sig in (sig + "=", sig[:-1], sig + "AB", sig[:5] + "*" + sig[6:]):
+        r = client.get("/audit/v1/rbac/platform/config", headers=bearer(f"{head}.{body}.{bad_sig}"))
+        assert r.status_code == 401
+    raw = f"Bearer {head}.{body}.{sig}\u00e9".encode("latin-1")
+    assert client.get("/audit/v1/rbac/platform/config", headers={"Authorization": raw}).status_code == 401
+    assert client.get("/audit/v1/rbac/platform/config", headers=bearer(good)).status_code == 200
