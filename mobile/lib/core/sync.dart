@@ -51,10 +51,10 @@ class SyncResult {
   String get reason {
     if (status == 'applied') {
       return resolution == 'rebased_append'
-          ? 'Applied. Others had made changes meanwhile, so it was added after theirs.'
-          : 'Applied on the server.';
+          ? 'Others made changes meanwhile, so it was added after theirs.'
+          : 'Saved on the server.';
     }
-    if (status == 'duplicate') return 'Already on the server, so it was skipped (nothing changed).';
+    if (status == 'duplicate') return 'It was already on the server, so nothing changed.';
     return friendlyError(errorCode);
   }
 
