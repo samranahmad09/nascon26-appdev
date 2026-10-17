@@ -1,9 +1,10 @@
 import itertools
 import random
+import time
 
 import pytest
 
-from app.modules.fixtures import matching
+from app.modules.fixtures import matching, weighted
 
 URL = "/audit/v1/fixtures"
 POINTS = {"home": (2, 0), "away": (0, 2), "draw": (1, 1)}
@@ -228,22 +229,50 @@ def test_matching_unit():
             assert all(mate[mate[v]] == v and mate[v] in adj[v] for v in range(m))
 
 
-def test_search_timeout_falls_back_to_feasible_pairing(monkeypatch):
+def test_weighted_matching_unit():
+    rng = random.Random(8)
+    for _ in range(1500):
+        m = rng.choice([2, 4, 6, 8, 10])
+        density = rng.random()
+        cost = {e: rng.randint(0, rng.choice([1, 3, 12])) for e in itertools.combinations(range(m), 2)
+                if rng.random() < density}
+        best = min((sum(cost[e] for e in pm) for pm in perfect_matchings(list(range(m))) if all(e in cost for e in pm)),
+                   default=None)
+        top = max(cost.values(), default=0) + 1
+        mate = weighted.max_weight_matching(m, [(p, q, top - c) for (p, q), c in cost.items()])
+        assert all(mate[mate[v]] == v for v in range(m) if mate[v] != -1)
+        if best is None:
+            assert -1 in mate
+        else:
+            assert -1 not in mate
+            assert sum(cost[(v, mate[v])] for v in range(m) if mate[v] > v) == best
+    assert weighted.max_weight_matching(3, []) == [-1, -1, -1]
+
+
+def test_search_timeout_keeps_exact_optimum(monkeypatch):
     monkeypatch.setattr(matching, "SEARCH_SECONDS", -1.0)
-    score = [4, 4, 2, 2, 0, 0]
-    played = [set() for _ in range(6)]
+    score = [6, 4, 4, 2, 2, 0]
+    played = [{1, 2}, {0}, {0}, set(), set(), set()]
     pairs = matching.min_cost_pairing(list(range(6)), score, played)
     assert sorted(x for p in pairs for x in p) == list(range(6))
+    assert all(b not in played[a] for a, b in pairs)
+    assert sum(score[a] - score[b] for a, b in pairs) == 6
     assert matching.min_cost_pairing([], score, played) == []
 
 
-def test_large_field_is_fast(client):
+@pytest.mark.parametrize("mode", ["random", "home"])
+def test_large_field_late_rounds(client, mode):
     rng = random.Random(11)
     teams = [f"L{i}" for i in range(1, 65)]
-    body, history = swiss(client, teams, total_rounds=12).json(), []
-    for rnd in range(2, 13):
+    body, history = swiss(client, teams, total_rounds=20).json(), []
+    for rnd in range(2, 21):
         history.append(play(rng, body, rnd - 1))
-        r = swiss(client, teams, total_rounds=12, round=rnd, history=history)
+        if mode == "home":
+            for m in history[-1]["matches"]:
+                m["result"] = "home"
+        started = time.monotonic()
+        r = swiss(client, teams, total_rounds=20, round=rnd, history=history)
+        assert time.monotonic() - started < 2.0
         assert r.status_code == 200, r.text
         body = r.json()
         half, _, played, _ = table(teams, history)

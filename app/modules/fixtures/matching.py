@@ -1,15 +1,19 @@
 """Exact minimum-cost rematch-free pairing for Swiss rounds (Section 5.7-B (d)).
 
 Nodes are given in standings order, so their scores never increase along the list and
-the cost of pairing positions p < q is score[p] - score[q]. Edmonds' blossom algorithm
-decides in polynomial time whether any rematch-free pairing exists; a memoised branch
-and bound then finds the cheapest one. Its lower bound is the cost of pairing the
-remaining teams adjacently in score order, which is optimal when rematches are ignored.
+the cost of pairing positions p < q is score[p] - score[q]. Edmonds' cardinality blossom
+algorithm decides whether any rematch-free pairing exists; the weighted blossom algorithm
+(weighted.py) then gives the exact minimum cost in O(n^3). A short depth-first search
+re-finds a pairing of that cost with the top of the table paired first (the spec
+example's tie-break), pruned by the cost of pairing the remaining teams adjacently in
+score order; if it runs out of time the weighted solution is used as is.
 """
 import time
 from collections import deque
 
-SEARCH_SECONDS = 3.0
+from .weighted import max_weight_matching
+
+SEARCH_SECONDS = 0.25
 _INF = 1 << 40
 
 
@@ -99,15 +103,18 @@ def _bits(mask: int) -> list[int]:
     return out
 
 
-def _branch_and_bound(score: list[int], allow: list[int], limit: int, deadline: float) -> list[tuple[int, int]] | None:
-    exact = {0: 0}
+def _first_optimal(score: list[int], allow: list[int], target: int, deadline: float) -> list[tuple[int, int]]:
+    """Depth-first search in standings order for a pairing that costs exactly target.
+
+    target is the known optimum, so the first complete pairing found under the cap is
+    optimal; this only picks the natural tie-break (top of the table paired first).
+    """
     lower: dict[int, int] = {}
     choice: dict[int, int] = {}
 
     def solve(mask: int, cap: int) -> int | None:
-        known = exact.get(mask)
-        if known is not None:
-            return known if known < cap else None
+        if mask == 0:
+            return 0
         if lower.get(mask, 0) >= cap:
             return None
         if time.monotonic() > deadline:
@@ -130,34 +137,27 @@ def _branch_and_bound(score: list[int], allow: list[int], limit: int, deadline: 
         suf = [0] * (size + 2)
         for i in range(size - 2, 0, -2):
             suf[i] = rest[i] - rest[i + 1] + suf[i + 2]
-        best, best_cost = None, cap
         without_first = mask & ~(1 << first)
         for t in range(size):
             cost = x[0] - rest[t]
-            if cost >= best_cost:
+            if cost >= cap:
                 break
             q = pos[t + 1]
             if not (allow[first] >> q) & 1:
                 continue
             bound = pre[t] + suf[t + 1] if t % 2 == 0 else pre[t - 1] + rest[t - 1] - rest[t + 1] + suf[t + 2]
-            if cost + bound >= best_cost:
+            if cost + bound >= cap:
                 continue
-            sub = solve(without_first & ~(1 << q), best_cost - cost)
+            sub = solve(without_first & ~(1 << q), cap - cost)
             if sub is not None:
-                best, best_cost = q, cost + sub
-                if best_cost == floor:
-                    break
-        if best is None:
-            lower[mask] = max(lower.get(mask, 0), cap)
-            return None
-        exact[mask] = best_cost
-        choice[mask] = best
-        return best_cost
-
-    full = (1 << len(score)) - 1
-    if solve(full, limit) is None:
+                choice[mask] = q
+                return cost + sub
+        lower[mask] = max(lower.get(mask, 0), cap)
         return None
-    pairs, mask = [], full
+
+    mask = (1 << len(score)) - 1
+    solve(mask, target + 1)
+    pairs = []
     while mask:
         first = (mask & -mask).bit_length() - 1
         q = choice[mask]
@@ -176,15 +176,16 @@ def min_cost_pairing(nodes: list[int], score: list[int], played: list[set]) -> l
     if m == 0:
         return []
     adj = [[q for q in range(m) if q != p and nodes[q] not in played[nodes[p]]] for p in range(m)]
-    mate = perfect_matching(m, adj)
-    if mate is None:
+    if perfect_matching(m, adj) is None:
         return None
     s = [score[x] for x in nodes]
+    top = s[0] - s[-1] + 1
+    mate = max_weight_matching(m, [(p, q, top - (s[p] - s[q])) for p in range(m) for q in adj[p] if p < q])
+    optimal = sorted((p, mate[p]) for p in range(m) if p < mate[p])
+    target = sum(s[p] - s[q] for p, q in optimal)
     allow = [sum(1 << q for q in adj[p]) for p in range(m)]
-    fallback = sorted((p, mate[p]) for p in range(m) if p < mate[p])
-    upper = sum(s[p] - s[q] for p, q in fallback)
     try:
-        pairs = _branch_and_bound(s, allow, upper + 1, time.monotonic() + SEARCH_SECONDS)
+        pairs = _first_optimal(s, allow, target, time.monotonic() + SEARCH_SECONDS)
     except _Timeout:
-        pairs = None
-    return [(nodes[p], nodes[q]) for p, q in (pairs or fallback)]
+        pairs = optimal
+    return [(nodes[p], nodes[q]) for p, q in pairs]
