@@ -302,6 +302,7 @@ def test_validation(client):
         {**h1, "matches": [{"home": "t1", "away": "t2", "result": "win"}]},
         {**h1, "matches": [{"home": "t1", "away": "t9", "result": "home"}]},
         {**h1, "matches": [{"home": "t5", "away": "t2", "result": "home"}]}, "round1",
+        {**h1, "matches": [{"home": 5, "away": "t2", "result": "home"}]}, {**h1, "matches": ["t1-t2"]},
     ]
     for entry in bad:
         assert fields(swiss(client, teams, round=2, history=[entry])) == hist

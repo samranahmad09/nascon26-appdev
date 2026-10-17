@@ -109,7 +109,9 @@ def _parse_history(items, known):
         seen = [bye] if bye is not None else []
         matches = []
         for m in entry["matches"]:
-            if not isinstance(m, dict) or not is_id(m.get("home")) or not is_id(m.get("away"))                     or m.get("result") not in RESULTS:
+            if not isinstance(m, dict) or m.get("result") not in RESULTS:
+                return None
+            if not is_id(m.get("home")) or not is_id(m.get("away")):
                 return None
             seen += [m["home"], m["away"]]
             matches.append((m["home"], m["away"], m["result"]))
