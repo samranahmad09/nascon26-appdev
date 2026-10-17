@@ -36,14 +36,14 @@ class Settings extends ChangeNotifier {
   static const defaultUrl = 'http://10.0.2.2:8080';
 
   String baseUrl = defaultUrl;
-  bool useSampleData = true;
+  bool useSampleData = false; // every app route is live; kept only as a developer fallback
   String deviceId = '';
   String? leagueId;
 
   void load() {
     final m = LocalStore.meta;
     baseUrl = m.get('base_url') ?? defaultUrl;
-    useSampleData = (m.get('sample_data') ?? 'true') == 'true';
+    useSampleData = (m.get('sample_data') ?? 'false') == 'true';
     leagueId = m.get('league_id');
     var id = m.get('device_id');
     if (id == null || id.isEmpty) {

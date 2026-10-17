@@ -36,6 +36,7 @@ class CartLine {
   String get title => '${product['name']}';
   String get options => [variant['size'], variant['color']]
       .where((e) => e != null && '$e'.isNotEmpty)
+      .map((e) => titleCase('$e'))
       .join(' · ');
 }
 

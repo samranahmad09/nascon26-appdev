@@ -36,5 +36,5 @@ Build: `flutter build apk --release` inside `mobile/`, then copy
 * An account that signed in on this phone before can sign in again while offline (salted hash check), so the
   organizer and the manager can both act during the airplane-mode check.
 
-`lib/core/sample_data.dart` holds clearly labelled sample data that is used only when the server has no such route
-and the "Use sample data" switch in Settings is on.
+`lib/core/sample_data.dart` holds clearly labelled sample data used during development before the server routes
+existed. It is off by default (`Settings.useSampleData`) and only ever applies to a route that 404s as missing.
