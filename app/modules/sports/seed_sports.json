@@ -41,6 +41,15 @@
       },
       "three_pointer": {
         "points": 3
+      },
+      "two_point": {
+        "points": 2
+      },
+      "three_point": {
+        "points": 3
+      },
+      "one_pointer": {
+        "points": 1
       }
     },
     "draw_allowed": false,
@@ -104,6 +113,21 @@
         "runs": 0,
         "legal_ball": true,
         "wicket": true
+      },
+      "dot": {
+        "runs": 0,
+        "legal_ball": true,
+        "wicket": false
+      },
+      "three": {
+        "runs": 3,
+        "legal_ball": true,
+        "wicket": false
+      },
+      "noball": {
+        "runs": 1,
+        "legal_ball": false,
+        "wicket": false
       }
     },
     "draw_allowed": true,
@@ -127,6 +151,12 @@
     },
     "scoring_events": {
       "round_win": {
+        "rounds": 1
+      },
+      "round": {
+        "rounds": 1
+      },
+      "map_win": {
         "rounds": 1
       }
     },

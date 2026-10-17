@@ -8,3 +8,4 @@ mobile
 cov.json
 .env
 *.md
+.claude

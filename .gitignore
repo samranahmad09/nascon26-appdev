@@ -15,3 +15,4 @@ mobile/**/.flutter-plugins-dependencies
 mobile/**/*.iml
 mobile/**/.idea/
 !mobile/release/
+.claude/
