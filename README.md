@@ -19,7 +19,7 @@ One command brings up everything on a clean Linux machine and seeds the baseline
 | `db` | postgres:16-alpine | Source of truth (append-only event log, orders, rosters) |
 | `redis` | redis:7-alpine | Domain event stream (Redis Streams) |
 | `worker` | same image as `api` | Consumes domain events |
-| `minio` | bitnamilegacy/minio:2024.9.22 | Object store for PDF receipts |
+| `minio` | bitnamilegacy/minio:2024.9.22 | S3-compatible object store, provisioned for receipt archival (receipts are generated on demand by the API today). `minio/minio` is no longer published on Docker Hub, so the Bitnami build of the same release is used |
 
 `DAY1_SALT` is read only from the environment. See `.env.example` for every variable.
 
