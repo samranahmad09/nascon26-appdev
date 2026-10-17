@@ -183,13 +183,13 @@ def test_result_corrected_after_qualification_is_recomputed(fresh):
     body = league(league_id="lg-q", teams=["t1", "t2", "t3"], qualification={"spots": 1},
                   fixtures=[fixture("q1", "t1", "t2"), fixture("q2", "t2", "t3"), fixture("q3", "t3", "t1")])
     assert fresh.post(LEAGUES, json=body).status_code == 201
-    goals = {}
-    for match_id, home, away, home_goals, away_goals in [("q1", "t1", "t2", 2, 1), ("q2", "t2", "t3", 0, 0),
+    tallies = {}
+    for match_id, home, away, home_points, away_points in [("q1", "t1", "t2", 2, 1), ("q2", "t2", "t3", 0, 0),
                                                          ("q3", "t3", "t1", 0, 1)]:
         m = Match(fresh, None, home, away, match_id=match_id, init=False)
         m.start()
-        goals[match_id] = [m.score(home, point) for _ in range(home_goals)] + \
-                          [m.score(away, point) for _ in range(away_goals)]
+        tallies[match_id] = [m.score(home, point) for _ in range(home_points)] + \
+                          [m.score(away, point) for _ in range(away_points)]
         m.end()
     with locks.GLOBAL, db.tx() as conn:
         before = service.league_projections(conn, "lg-q")
@@ -197,7 +197,7 @@ def test_result_corrected_after_qualification_is_recomputed(fresh):
     original = fresh.get("/audit/v1/score/q1").json()["events"]
 
     q1 = Match(fresh, None, "t1", "t2", match_id="q1", init=False)
-    comp = q1.compensate(goals["q1"][0]["event_id"], "disallowed")
+    comp = q1.compensate(tallies["q1"][0]["event_id"], "disallowed")
     with locks.GLOBAL, db.tx() as conn:
         after = service.league_projections(conn, "lg-q")
         assert after[0] == service.project(conn, "q1")

@@ -186,6 +186,8 @@ def test_idempotent_replay_and_duplicate_event_id(fresh):
 
     again = fresh.post(EVENTS, json=score)
     assert again.status_code == 200 and again.json() == first.json()
+    assert list(again.json()) == list(first.json()) == ["event_id", "match_id", "type", "sequence", "match_version",
+                                                         "signature"]
     reordered = {"payload": {"event_type": point, "team_id": "h"}, "type": "score", "match_id": m.id,
                  "event_id": "dup-1", "ignored_extra": True}
     assert fresh.post(EVENTS, json=reordered).json() == first.json()
@@ -314,26 +316,26 @@ def test_compensation_after_completion_flips_outcome(fresh):
     m = Match(fresh, DRAWS["sport_id"], "t1", "t2")
     m.start()
     m.score("t1", point)
-    away_goal = m.score("t2", point)
-    late_goal = m.score("t1", point)
+    away_point = m.score("t2", point)
+    late_point = m.score("t1", point)
     m.end()
     before = m.get()
     assert (before["outcome"], before["winner_team_id"]) == ("home_win", "t1")
 
-    comp = m.compensate(late_goal["event_id"], "offside")
+    comp = m.compensate(late_point["event_id"], "offside")
     assert (comp["sequence"], comp["match_version"]) == (7, 7)
-    assert comp["signature"] == sign(comp["event_id"], {"compensates": late_goal["event_id"], "reason": "offside"})
+    assert comp["signature"] == sign(comp["event_id"], {"compensates": late_point["event_id"], "reason": "offside"})
     after = m.get()
     assert (after["status"], after["outcome"], after["winner_team_id"]) == ("completed", "draw", None)
     assert after["home"]["score"] == 1 and after["version"] == 7
     target, compensation = after["events"][4], after["events"][6]
     assert target == {**before["events"][4], "compensated": True, "compensated_by": comp["event_id"]}
     assert compensation == {"sequence": 7, "event_id": comp["event_id"], "type": "compensation",
-                            "payload": {"compensates": late_goal["event_id"], "reason": "offside"},
+                            "payload": {"compensates": late_point["event_id"], "reason": "offside"},
                             "signature": comp["signature"], "compensated": False, "compensated_by": None}
     assert after["events"][:4] == before["events"][:4]
 
-    m.compensate(away_goal["event_id"])
+    m.compensate(away_point["event_id"])
     flipped = m.get()
     assert (flipped["outcome"], flipped["winner_team_id"]) == ("home_win", "t1")
     assert (flipped["home"]["score"], flipped["away"]["score"]) == (1, 0)
@@ -400,7 +402,7 @@ def test_compensation_rules(fresh):
     point = kind_of(DRAWS, points=1)
     m = Match(fresh, DRAWS["sport_id"])
     start = m.start()
-    goal = m.score("h", point)
+    scored = m.score("h", point)
     card = m.ok("discipline", {"team_id": "a", "points": -3})
     other = Match(fresh, DRAWS["sport_id"])
     other.start()
@@ -410,8 +412,8 @@ def test_compensation_rules(fresh):
     err(m.post("compensation", {"compensates": start["event_id"], "reason": "x"}), 409, "INVALID_COMPENSATION")
     err(m.post("compensation", {"compensates": m.init_id, "reason": "x"}), 409, "INVALID_COMPENSATION")
     err(m.post("compensation", {"compensates": foreign["event_id"], "reason": "x"}), 409, "INVALID_COMPENSATION")
-    comp = m.compensate(goal["event_id"])
-    err(m.post("compensation", {"compensates": goal["event_id"], "reason": "x"}), 409, "INVALID_COMPENSATION")
+    comp = m.compensate(scored["event_id"])
+    err(m.post("compensation", {"compensates": scored["event_id"], "reason": "x"}), 409, "INVALID_COMPENSATION")
     err(m.post("compensation", {"compensates": comp["event_id"], "reason": "x"}), 409, "INVALID_COMPENSATION")
     assert m.get()["away"]["fair_play"] == -3
     m.compensate(card["event_id"])

@@ -46,6 +46,7 @@ register(SCHEMA, ["scoring_events", "scoring_matches", "scoring_leagues"])
 
 _STREAM_COLS = "match_id, sport_id, home_team_id, away_team_id, league_id"
 _EVENT_COLS = "sequence, event_id, type, payload, signature, compensates"
+_RESPONSE_KEYS = ("event_id", "match_id", "type", "sequence", "match_version", "signature")
 
 
 def _stream(conn, match_id: str) -> dict | None:
@@ -108,7 +109,8 @@ def append_event(conn, body) -> tuple[int, dict]:
                          (event["event_id"],)).fetchone()
     if prior is not None:
         if prior["request"] == event["request"]:
-            return 200, prior["response"]
+            stored = prior["response"]
+            return 200, {k: stored[k] for k in _RESPONSE_KEYS}
         raise conflict("DUPLICATE_EVENT_ID", f"Event {event['event_id']} was already recorded with a different body.",
                        {"event_id": event["event_id"]})
 
