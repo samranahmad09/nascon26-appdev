@@ -1,4 +1,8 @@
-"""Core baseline data: tenants, RBAC scenario (leagues, clubs, players) and the five demo users."""
+"""Core baseline data: tenants, RBAC scenario (leagues, clubs, players) and the five demo users.
+The data itself lives in seed_data.json so no sport or entity name is hard-coded in Python."""
+import json
+from pathlib import Path
+
 from .auth import hash_password
 from .db import Jsonb
 from .registry import register
@@ -21,52 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
 """
 
 DEMO_PASSWORD = "Nascon@26"
-
-TENANTS = [
-    ("tenant-alpha", "Alpha Sports", {"logo_url": "/static/alpha.png", "primary_color": "#0B5FFF", "secondary_color": "#FFB800"}),
-    ("tenant-beta", "Beta Athletics", {"logo_url": "/static/beta.png", "primary_color": "#0E9F6E", "secondary_color": "#1F2937"}),
-]
-
-TENANT_LEAGUES = [
-    ("league-alpha-1", "tenant-alpha", "Alpha Premier League", "football", "2026", "user-organizer"),
-    ("league-alpha-2", "tenant-alpha", "Alpha Hoops League", "basketball", "2026", None),
-    ("league-beta-1", "tenant-beta", "Beta Champions League", "football", "2026", None),
-]
-
-
-def _club(name, venue, lat, lng, coach):
-    return {
-        "home_venue": {"name": venue, "lat": lat, "lng": lng},
-        "socials": {"x": "@" + name.replace(" ", "").lower(), "instagram": name.replace(" ", "").lower()},
-        "staff": [{"role": "coach", "name": coach}, {"role": "manager", "name": "Sana Iqbal"},
-                  {"role": "physio", "name": "Dr. Omar Shah"}],
-        "history": [{"season": "2024", "played": 18, "won": 9, "drawn": 5, "lost": 4},
-                    {"season": "2025", "played": 18, "won": 11, "drawn": 3, "lost": 4}],
-    }
-
-
-CLUBS = [
-    ("club-alpha-1", "tenant-alpha", "league-alpha-1", "Alpha United", _club("Alpha United", "Alpha Arena", 33.6844, 73.0479, "Imran Qureshi")),
-    ("club-alpha-2", "tenant-alpha", "league-alpha-1", "Alpha Rovers", _club("Alpha Rovers", "Rovers Ground", 33.7215, 73.0433, "Faisal Mir")),
-    ("club-beta-1", "tenant-beta", "league-beta-1", "Beta City", _club("Beta City", "Beta Stadium", 31.5204, 74.3587, "Kamran Ali")),
-]
-
-PLAYERS = [
-    ("player-alpha-1", "tenant-alpha", "club-alpha-1", "Ahmed Raza", "fw", "captain", 9),
-    ("player-alpha-1b", "tenant-alpha", "club-alpha-1", "Bilal Khan", "gk", "starter", 1),
-    ("player-alpha-1c", "tenant-alpha", "club-alpha-1", "Usman Tariq", "df", "vice_captain", 4),
-    ("player-alpha-1d", "tenant-alpha", "club-alpha-1", "Hamza Ali", "mf", "substitute", 8),
-    ("player-alpha-2", "tenant-alpha", "club-alpha-2", "Zain Malik", "mf", "captain", 10),
-    ("player-beta-1", "tenant-beta", "club-beta-1", "Danish Javed", "fw", "captain", 7),
-]
-
-USERS = [
-    ("user-admin", "admin@nascon.test", "Platform Admin", "super_admin", None, [], None, None),
-    ("user-organizer", "organizer@nascon.test", "League Organizer", "league_organizer", "tenant-alpha", ["league-alpha-1"], None, None),
-    ("user-manager", "manager@nascon.test", "Club Manager", "club_manager", "tenant-alpha", [], "club-alpha-1", None),
-    ("user-player", "player@nascon.test", "Ahmed Raza", "player", "tenant-alpha", [], "club-alpha-1", "player-alpha-1"),
-    ("user-viewer", "viewer@nascon.test", "General Viewer", "viewer", "tenant-alpha", [], None, None),
-]
+DATA = json.loads(Path(__file__).with_name("seed_data.json").read_text(encoding="utf-8"))
 
 _hash_cache: dict[str, str] = {}
 
@@ -77,19 +36,46 @@ def _hash(user_id: str) -> str:
     return _hash_cache[user_id]
 
 
+def club_profile(club: dict) -> dict:
+    handle = club["name"].replace(" ", "").lower()
+    return {
+        "home_venue": {"name": club["venue"], "lat": club["lat"], "lng": club["lng"]},
+        "socials": {"x": "@" + handle, "instagram": handle},
+        "staff": [{"role": "coach", "name": club["coach"]}, {"role": "manager", "name": "Sana Iqbal"},
+                  {"role": "physio", "name": "Dr. Omar Shah"}],
+        "history": [{"season": "2024", "played": 18, "won": 9, "drawn": 5, "lost": 4},
+                    {"season": "2025", "played": 18, "won": 11, "drawn": 3, "lost": 4}],
+    }
+
+
+# Tuple views kept for modules written against the earlier constants.
+TENANTS = [(t["tenant_id"], t["name"], t["branding"]) for t in DATA["tenants"]]
+TENANT_LEAGUES = [(lg["league_id"], lg["tenant_id"], lg["name"], lg["sport_id"], lg["season"], lg["organizer_user_id"])
+                  for lg in DATA["tenant_leagues"]]
+CLUBS = [(c["club_id"], c["tenant_id"], c["league_id"], c["name"], club_profile(c)) for c in DATA["clubs"]]
+PLAYERS = [(p["player_id"], p["tenant_id"], p["club_id"], p["name"], p["position"], p["role"], p["shirt_number"])
+           for p in DATA["players"]]
+USERS = [(u["user_id"], u["email"], u["display_name"], u["role"], u["tenant_id"], u["league_ids"], u["club_id"],
+          u["player_id"]) for u in DATA["users"]]
+
+
 def seed(conn, opts: dict) -> None:
-    for tid, name, branding in TENANTS:
-        conn.execute("INSERT INTO tenants VALUES (%s, %s, %s)", (tid, name, Jsonb(branding)))
-    for row in TENANT_LEAGUES:
+    for t in DATA["tenants"]:
+        conn.execute("INSERT INTO tenants VALUES (%s, %s, %s)", (t["tenant_id"], t["name"], Jsonb(t["branding"])))
+    for lg in DATA["tenant_leagues"]:
         conn.execute("INSERT INTO tenant_leagues (league_id, tenant_id, name, sport_id, season, organizer_user_id) "
-                     "VALUES (%s, %s, %s, %s, %s, %s)", row)
-    for cid, tid, lid, name, profile in CLUBS:
-        conn.execute("INSERT INTO clubs VALUES (%s, %s, %s, %s, %s)", (cid, tid, lid, name, Jsonb(profile)))
-    for row in PLAYERS:
-        conn.execute("INSERT INTO players VALUES (%s, %s, %s, %s, %s, %s, %s)", row)
-    for uid, email, display, role, tid, leagues, club, player in USERS:
+                     "VALUES (%s, %s, %s, %s, %s, %s)",
+                     (lg["league_id"], lg["tenant_id"], lg["name"], lg["sport_id"], lg["season"], lg["organizer_user_id"]))
+    for c in DATA["clubs"]:
+        conn.execute("INSERT INTO clubs VALUES (%s, %s, %s, %s, %s)",
+                     (c["club_id"], c["tenant_id"], c["league_id"], c["name"], Jsonb(club_profile(c))))
+    for p in DATA["players"]:
+        conn.execute("INSERT INTO players VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                     (p["player_id"], p["tenant_id"], p["club_id"], p["name"], p["position"], p["role"], p["shirt_number"]))
+    for u in DATA["users"]:
         conn.execute("INSERT INTO users VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                     (uid, email, _hash(uid), display, role, tid, Jsonb(leagues), club, player))
+                     (u["user_id"], u["email"], _hash(u["user_id"]), u["display_name"], u["role"], u["tenant_id"],
+                      Jsonb(u["league_ids"]), u["club_id"], u["player_id"]))
 
 
 register(SCHEMA, ["app_state", "tenants", "tenant_leagues", "clubs", "players", "users"], seed, order=0)
