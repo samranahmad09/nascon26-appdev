@@ -391,3 +391,17 @@ def test_catalog_lookup_of_unknown_products():
         assert catalog.product_payload(conn, "prod-ghost") is None
         assert catalog.product_payload(conn, "bad|id") is None
         assert catalog.product_payload(conn, "prod-wallpaper-001")["variants"][0]["color"] is None
+
+
+def test_longest_ids_stay_whole_in_the_pdf_text(fresh):
+    wide_id = "W" * 64
+    r = fresh.post("/audit/v1/checkout", json=order(wide_id, customer="M" * 512,
+                                                    items=[{"variant_id": L, "quantity": 10}]))
+    assert_error(r, 409, "OUT_OF_STOCK")
+    r = fresh.post("/audit/v1/checkout", json=order(wide_id, customer="M" * 512))
+    assert r.status_code == 201, r.text
+    text = pdf_text(r.json())
+    assert wide_id in text and "PKR 4500.00" in text
+    mixed = "Ord_9.x:Y-" * 6 + "Zz-0"
+    r = fresh.post("/audit/v1/checkout", json=order(mixed, items=[{"variant_id": L, "quantity": 1}]))
+    assert mixed in pdf_text(r.json())
