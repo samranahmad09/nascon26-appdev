@@ -23,7 +23,10 @@ async def json_body(request: Request):
     except (ValueError, UnicodeDecodeError):
         raise validation_error(["body"], "Request body is not valid JSON.")
     if not _storable(data):
-        raise validation_error(["body"], "Text may not contain NUL characters or unpaired surrogates.")
+        fields = ["body"]
+        if isinstance(data, dict) and all(_storable(k) for k in data):
+            fields = [k for k, v in data.items() if not _storable(v)]
+        raise validation_error(fields, "Text may not contain NUL characters or unpaired surrogates.")
     return data
 
 

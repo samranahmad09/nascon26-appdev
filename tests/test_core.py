@@ -115,7 +115,11 @@ def test_noncanonical_jwt_signature_is_rejected():
 
 
 def test_nul_and_lone_surrogate_text_is_400(client):
-    for raw in (b'{"sport_id": "a\u0000b"}', b'{"sport_id": "\ud800"}'):
+    for raw in (rb'{"sport_id": "a\u0000b"}', rb'{"sport_id": "\ud800"}'):
         r = client.post("/audit/v1/sports", content=raw, headers={"content-type": "application/json"})
         assert r.status_code == 400, raw
-        assert r.json()["error"]["code"] == "VALIDATION_ERROR"
+        assert r.json()["error"]["details"]["fields"] == ["sport_id"]
+    r = client.post("/audit/v1/sports", content=rb'["\u0000"]', headers={"content-type": "application/json"})
+    assert r.json()["error"]["details"]["fields"] == ["body"]
+    r = client.post("/audit/v1/sports", content=rb'{"\ud800": 1}', headers={"content-type": "application/json"})
+    assert r.json()["error"]["details"]["fields"] == ["body"]
