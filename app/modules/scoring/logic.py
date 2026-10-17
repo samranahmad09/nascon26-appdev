@@ -36,7 +36,7 @@ def _payload_errors(kind: str, p: dict) -> list[str]:
             bad.append("payload." + key)
 
     if kind == "match_init":
-        if not isinstance(p.get("sport_id"), str) or not p["sport_id"]:
+        if not is_id(p.get("sport_id")):
             bad.append("payload.sport_id")
         need_id("home_team_id")
         need_id("away_team_id")
@@ -254,7 +254,7 @@ def check_append(event: dict, stream: dict, sport: dict, state: dict) -> None:
 def validate_league(body) -> dict:
     v = Validator(body)
     league_id = v.ident("league_id")
-    sport_id = v.string("sport_id")
+    sport_id = v.ident("sport_id")
     teams = v.array("teams", min_len=2, max_len=40)
     fixtures = v.array("fixtures")
     points = v.obj("points", required=False)

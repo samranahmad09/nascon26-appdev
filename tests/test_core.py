@@ -123,3 +123,22 @@ def test_nul_and_lone_surrogate_text_is_400(client):
     assert r.json()["error"]["details"]["fields"] == ["body"]
     r = client.post("/audit/v1/sports", content=rb'{"\ud800": 1}', headers={"content-type": "application/json"})
     assert r.json()["error"]["details"]["fields"] == ["body"]
+
+
+def test_hostile_inputs_never_500(fresh):
+    deep = b"[" * 5000 + b"]" * 5000
+    r = fresh.post("/audit/v1/events", content=deep, headers={"content-type": "application/json"})
+    assert r.status_code == 400
+    for path in ("/audit/v1/score/a%00b", "/audit/v1/standings/a%00b", "/audit/v1/roster/history/a%00b",
+                 "/audit/v1/inventory/a%00b"):
+        assert fresh.get(path).status_code in (400, 404), path
+
+
+def test_malformed_sport_id_is_400_everywhere(fresh):
+    bad = "x'; DROP TABLE sports;--"
+    r = fresh.post("/audit/v1/leagues", json={"league_id": "lg-x", "sport_id": bad, "teams": ["t1", "t2"],
+                                               "fixtures": [], "qualification": {"spots": 1}})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "VALIDATION_ERROR"
+    r = fresh.post("/audit/v1/events", json={"event_id": "e-x", "match_id": "m-x", "type": "match_init",
+                                              "payload": {"sport_id": bad, "home_team_id": "a", "away_team_id": "b"}})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "VALIDATION_ERROR"

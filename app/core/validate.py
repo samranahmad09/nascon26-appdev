@@ -20,9 +20,10 @@ async def json_body(request: Request):
         return None
     try:
         data = json.loads(raw)
-    except (ValueError, UnicodeDecodeError):
-        raise validation_error(["body"], "Request body is not valid JSON.")
-    if not _storable(data):
+        storable = _storable(data)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        raise validation_error(["body"], "Request body is not valid JSON or is nested too deeply.")
+    if not storable:
         fields = ["body"]
         if isinstance(data, dict) and all(_storable(k) for k in data):
             fields = [k for k, v in data.items() if not _storable(v)]

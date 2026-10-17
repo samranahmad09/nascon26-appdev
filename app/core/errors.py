@@ -1,3 +1,4 @@
+import psycopg
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -48,6 +49,12 @@ def install(app) -> None:
             if name not in fields:
                 fields.append(name)
         return error_response(400, "VALIDATION_ERROR", "Request failed validation.", {"fields": fields})
+
+    @app.exception_handler(psycopg.DataError)
+    async def _bad_data(_: Request, exc: psycopg.DataError):
+        # e.g. a NUL character in a path id, or a number outside the column range: bad input, not a crash.
+        return error_response(400, "VALIDATION_ERROR", "A value in the request cannot be stored or looked up.",
+                              {"fields": ["path"]})
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
