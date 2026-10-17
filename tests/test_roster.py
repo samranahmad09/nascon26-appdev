@@ -394,7 +394,7 @@ def test_squad_members_for_club_profile(fresh):
         loaned = service.squad_members(conn, "lg-r1", "sq-b", on)
         assert loaned == [{"player_id": "p2", "name": "Bilal", "position": "df", "role": "substitute",
                            "shirt_number": None, "squad_id": "sq-b", "parent_squad_id": "sq-a"}]
-        back = service.squad_members(conn, "lg-r1", "sq-a", dt.date(2026, 9, 21))
+        back = service.squad_members(conn, "lg-r1", "sq-a", as_of=dt.date(2026, 9, 21))
         assert [(m["player_id"], m["role"]) for m in back] == [("p1", "captain"), ("p2", "substitute")]
         mirrored = service.squad_members(conn, "league-alpha-1", "club-alpha-1")
         assert "player-alpha-1" in [m["player_id"] for m in mirrored]

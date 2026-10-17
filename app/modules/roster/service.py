@@ -285,11 +285,11 @@ def _league_state(conn, league_id: str, day: dt.date) -> dict[str, dict]:
     return state
 
 
-def squad_members(conn, league_id: str, squad_id: str, day: dt.date | None = None) -> list[dict] | None:
-    """Players registered to the squad on `day` (default today) for the club profile; None if no roster league."""
+def squad_members(conn, league_id: str, squad_id: str, as_of: dt.date | None = None) -> list[dict] | None:
+    """Players registered to the squad on as_of (default today) for the club profile; None if no roster league."""
     if _league(conn, league_id) is None:
         return None
-    day = day or today()
+    day = as_of or today()
     by_player: dict[str, list] = {}
     for e in _entries(conn, league_id):
         by_player.setdefault(e["player_id"], []).append(e)
