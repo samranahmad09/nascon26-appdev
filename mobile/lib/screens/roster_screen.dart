@@ -168,8 +168,10 @@ class _RosterBody extends StatelessWidget {
                         Text('${positionLabel(p['position'] as String?)} · ${roleLabel(p['role'] as String?)}'),
                         if (pendingByPlayer.containsKey('${p['player_id']}')) ...[
                           const SizedBox(height: T.s4),
-                          StatusPill(Icons.schedule_send,
-                              'Pending: ${pendingByPlayer['${p['player_id']}']!.label}', Tone.warning),
+                          StatusPill(
+                              Icons.schedule_send,
+                              '${titleCase('${(pendingByPlayer['${p['player_id']}']!.action['payload'] as Map)['type']}')} waiting to sync',
+                              Tone.warning),
                         ],
                       ]),
                       trailing: const Icon(Icons.more_vert),

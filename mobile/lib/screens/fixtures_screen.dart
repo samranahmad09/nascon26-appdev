@@ -11,9 +11,14 @@ import 'home_shell.dart';
 import 'match_screen.dart';
 
 /// Loads the league list and the data for the selected league in one go.
-Future<Loaded> loadForLeague(Future<Loaded> Function(String leagueId) inner) async {
+Future<Loaded> loadForLeague(Future<Loaded> Function(String leagueId) inner,
+    {bool ownedOnly = false}) async {
   final ls = await svc.repo.leagues();
-  final leagues = (ls.data['leagues'] as List? ?? const []).cast<Map>();
+  var leagues = (ls.data['leagues'] as List? ?? const []).cast<Map>();
+  final owned = svc.session.leagueIds;
+  if (ownedOnly && svc.session.role == 'league_organizer' && owned.isNotEmpty) {
+    leagues = leagues.where((l) => owned.contains('${l['league_id']}')).toList();
+  }
   final id = currentLeague(leagues);
   if (id.isEmpty) {
     return Loaded({'_leagues': leagues, '_league_id': ''},

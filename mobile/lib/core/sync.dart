@@ -182,8 +182,10 @@ class SyncQueue extends ChangeNotifier {
       repo.bump();
       return null;
     } on ApiException catch (e) {
-      lastError = e.message;
-      return e.message;
+      lastError = e.isMissingRoute
+          ? "The server can't accept synced actions yet. They stay saved on this phone; try again later."
+          : '${e.message} Your actions stay saved on this phone.';
+      return lastError;
     } finally {
       _running = false;
       net.setSyncing(false);

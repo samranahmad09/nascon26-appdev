@@ -79,9 +79,20 @@ class QueueScreen extends StatelessWidget {
                     ? 'Nothing to sync'
                     : 'Sync now (${pending.length})'),
           ),
-          if (q.lastError != null) ...[
-            const SizedBox(height: T.s8),
-            StatusPill(Icons.error_outline, q.lastError!, Tone.danger),
+          if (q.lastError != null && pending.isNotEmpty) ...[
+            const SizedBox(height: T.s12),
+            Container(
+              padding: const EdgeInsets.all(T.s12),
+              decoration: BoxDecoration(color: T.dangerBg, borderRadius: BorderRadius.circular(T.r12)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.error_outline, color: T.danger),
+                const SizedBox(width: T.s12),
+                Expanded(
+                  child: Text("Last sync didn't finish. ${q.lastError!}",
+                      style: const TextStyle(color: T.danger, fontWeight: T.bold, fontSize: T.meta)),
+                ),
+              ]),
+            ),
           ],
           SectionTitle('Waiting to sync', trailing: Text('${pending.length}', style: tt.bodySmall)),
           if (pending.isEmpty)

@@ -30,16 +30,17 @@ class Net extends ChangeNotifier {
     try {
       final r = await Connectivity().checkConnectivity();
       hasNetwork = !_isNone(r);
+      if (!hasNetwork) serverReachable = false;
     } catch (_) {}
     _sub = Connectivity().onConnectivityChanged.listen((r) {
-      final was = online;
       hasNetwork = !_isNone(r);
-      notifyListeners();
-      if (hasNetwork) {
-        probe();
-      } else if (was) {
-        notifyListeners();
+      if (!hasNetwork) {
+        // Reachability must be re-proven after the network comes back,
+        // so the back-online callbacks (auto-sync) always fire.
+        serverReachable = false;
       }
+      notifyListeners();
+      if (hasNetwork) probe();
     });
     probe();
     // /health is outside the rate-limited /api/v1 group; 15 s keeps us well under any limit.

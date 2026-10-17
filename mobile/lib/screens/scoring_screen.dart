@@ -39,7 +39,7 @@ class ScoringScreen extends StatelessWidget {
       body: LoadedView(
         key: ValueKey('sc-${settings.leagueId}'),
         loadingText: 'Loading matches…',
-        load: () => loadForLeague(svc.repo.fixtures),
+        load: () => loadForLeague(svc.repo.fixtures, ownedOnly: true),
         builder: (context, loaded, refresh) {
           final leagues = (loaded.data['_leagues'] as List).cast<Map>();
           final matches = (loaded.data['matches'] as List? ?? const []).cast<Map>().toList();
