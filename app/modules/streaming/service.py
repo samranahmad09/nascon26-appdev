@@ -129,6 +129,46 @@ def active_keys(conn, player_ids) -> dict[str, str]:
     return {r["player_id"]: r["stream_key"] for r in rows}
 
 
+def stream_players(conn, entity_id: str) -> list[str]:
+    """Players whose live stream belongs on an entity's page, in preference order: a co-stream's active
+    participants (active host first), the player itself, a club's players, or a match's home then away
+    club players."""
+    from ..costream import service as costream
+
+    session = costream.get_session(conn, entity_id)
+    if session is not None:
+        return list(session["active_participants"])
+    if player_exists(conn, entity_id):
+        return [entity_id]
+    match = conn.execute("SELECT home_team_id, away_team_id FROM scoring_matches WHERE match_id = %s",
+                         (entity_id,)).fetchone()
+    clubs = [match["home_team_id"], match["away_team_id"]] if match else [entity_id]
+    rows = conn.execute("SELECT player_id, club_id FROM players WHERE club_id = ANY(%s) ORDER BY player_id",
+                        (clubs,)).fetchall()
+    return [r["player_id"] for club in clubs for r in rows if r["club_id"] == club]
+
+
+def playback_url_for(conn, entity_id: str) -> str | None:
+    """HLS URL to play on a guest page for a match, club, player or co-stream session while something is
+    publishing, else None (show "stream starting"). Read-only; a co-stream prefers its composite."""
+    from ..costream import service as costream
+
+    live = media.ready_paths(max_age=1.0)
+    if not live:
+        return None
+    if COSTREAM_PREFIX + entity_id in live:
+        return costream.composite_playback_url(entity_id)
+    players = stream_players(conn, entity_id)
+    keys = active_keys(conn, players)
+    for player_id in players:
+        if player_id in keys and live_path(keys[player_id]) in live:
+            return playback_url(keys[player_id])
+    return None
+
+
+active_playback_url = playback_url_for
+
+
 def key_status(conn, stream_key: str) -> str | None:
     row = conn.execute("SELECT status FROM sk_keys WHERE stream_key = %s", (stream_key,)).fetchone()
     return row["status"] if row else None

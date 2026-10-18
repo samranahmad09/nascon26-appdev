@@ -431,6 +431,46 @@ def test_media_ready_route(client, mediamtx):
     assert client.get("/internal/media/ready").json() == {"media_ready": True}
 
 
+def test_playback_url_for_matches_clubs_and_players(fresh, severed, mediamtx):
+    from app.core import db
+    home = post(fresh, action="generate", player_id="player-alpha-1").json()["stream_key"]
+    away = post(fresh, action="generate", player_id="player-alpha-2").json()["stream_key"]
+    fake = mediamtx(paths=[{"name": f"live/{away}", "ready": True}, {"name": f"live/{home}", "ready": False}])
+    away_url = f"http://localhost:8888/live/{away}/index.m3u8"
+    with db.tx() as conn:
+        assert service.playback_url_for(conn, "match-m1") == away_url
+        assert service.playback_url_for(conn, "club-alpha-2") == away_url
+        assert service.playback_url_for(conn, "player-alpha-2") == away_url
+        assert service.playback_url_for(conn, "player-alpha-1") is None
+        assert service.playback_url_for(conn, "club-alpha-3") is None
+        assert service.playback_url_for(conn, "nothing-here") is None
+    assert service.active_playback_url is service.playback_url_for
+    fake.paths[1]["ready"] = True
+    media.reset_cache()
+    with db.tx() as conn:
+        assert service.playback_url_for(conn, "match-m1") == f"http://localhost:8888/live/{home}/index.m3u8"
+
+
+def test_playback_url_for_costream_prefers_composite(fresh, severed, mediamtx):
+    from app.core import db
+    post(fresh, action="generate", player_id="player-alpha-1")
+    guest = post(fresh, action="generate", player_id="player-beta-1").json()["stream_key"]
+    fresh.post("/audit/v1/costream/session", json={"session_id": "cs-web", "host_player_id": "player-alpha-1",
+                                                    "participants": ["player-alpha-1", "player-beta-1"],
+                                                    "layout": "grid_2"})
+    fake = mediamtx(paths=[{"name": f"live/{guest}", "ready": True}])
+    with db.tx() as conn:
+        assert service.playback_url_for(conn, "cs-web") == f"http://localhost:8888/live/{guest}/index.m3u8"
+    fake.paths.append({"name": "costream/cs-web", "ready": True})
+    media.reset_cache()
+    with db.tx() as conn:
+        assert service.playback_url_for(conn, "cs-web") == "http://localhost:8888/costream/cs-web/index.m3u8"
+    media.reset_cache()
+    mediamtx(fail=True)
+    with db.tx() as conn:
+        assert service.playback_url_for(conn, "cs-web") is None
+
+
 def test_ready_paths(mediamtx):
     mediamtx(paths=[{"name": "live/a", "ready": True}, {"name": "live/b", "ready": False}])
     assert media.ready_paths() == {"live/a"}

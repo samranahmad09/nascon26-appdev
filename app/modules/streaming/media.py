@@ -82,9 +82,18 @@ def sever(paths, background: bool = True) -> None:
         _sweep(paths)
 
 
-def ready_paths() -> set[str]:
+_live = {"at": -1.0, "paths": set()}
+
+
+def ready_paths(max_age: float = 0.0) -> set[str]:
+    """Paths with a publisher right now. max_age > 0 reuses a listing that recent (page renders)."""
+    now = time.monotonic()
+    if max_age and now - _live["at"] < max_age:
+        return _live["paths"]
     listing = api_get("/v3/paths/list?itemsPerPage=1000", timeout=0.5)
-    return {p.get("name") for p in (listing or {}).get("items") or [] if p.get("ready")}
+    paths = {p.get("name") for p in (listing or {}).get("items") or [] if p.get("ready")}
+    _live.update(at=now, paths=paths)
+    return paths
 
 
 _ready = {"at": -READY_TTL_S, "ok": False}
@@ -156,6 +165,7 @@ def bitrate_kbps() -> float:
 
 
 def reset_cache() -> None:
+    _live.update(at=-1.0, paths=set())
     _ready["at"] = -READY_TTL_S
     _stats.update(at=-METRICS_TTL_S, streams=0, kbps=0.0, bytes={}, bytes_at=0.0)
 
