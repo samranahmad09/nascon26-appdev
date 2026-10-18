@@ -106,7 +106,15 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
 
   Future<void> _load() async {
     try {
-      final s = await loadCoStream(widget.sessionId);
+      Map<String, dynamic> s;
+      try {
+        s = await loadCoStream(widget.sessionId);
+      } on ApiException catch (e) {
+        if (e.network) rethrow;
+        // Session details not available: still show the room's chat and placeholder tiles.
+        s = {'session_id': widget.sessionId, 'participants': const <String>[], 'layout': 'grid_4',
+             'status': 'active', '_unavailable': true};
+      }
       if (!mounted) return;
       setState(() {
         session = s;
@@ -170,6 +178,10 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
     setState(() => _sending = true);
     try {
       final res = await svc.api.post('/api/v1/chat', {'chat_room_id': room, 'text': text});
+      if (res is Map && res['blocked'] == true) {
+        if (mounted) showError(context, 'The chat filter held that message back, so it was not posted.');
+        return;
+      }
       _text.clear();
       if (res is Map && (res['message'] is Map || res['sequence'] != null)) {
         final m = (res['message'] is Map ? res['message'] as Map : res).cast<String, dynamic>();
@@ -311,6 +323,12 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
                     if (host.isNotEmpty) StatusPill(Icons.star_outline, 'Host $host', Tone.neutral),
                   ]),
                   const SizedBox(height: T.s12),
+                  if (s['_unavailable'] == true)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: T.s12),
+                      child: Text('The broadcasters for this co-stream are not listed yet; the chat works.',
+                          style: tt.bodyMedium),
+                    ),
                   if (compositeUrl != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: T.s12),
@@ -347,7 +365,7 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
                         for (final m in msgs)
                           Semantics(
                             identifier: 'chat-message',
-                            label: '${m['sender'] ?? m['sender_id'] ?? 'Someone'}: ${m['text'] ?? ''}',
+                            label: '${m['sender_name'] ?? m['sender'] ?? m['sender_id'] ?? 'Someone'}: ${m['text'] ?? ''}',
                             child: ExcludeSemantics(
                               child: ListTile(
                                 dense: true,
@@ -355,10 +373,10 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
                                   radius: 16,
                                   backgroundColor: context.accent.withValues(alpha: 0.12),
                                   child: Text(
-                                      '${m['sender'] ?? m['sender_id'] ?? '?'}'.characters.first.toUpperCase(),
+                                      '${m['sender_name'] ?? m['sender'] ?? m['sender_id'] ?? '?'}'.characters.first.toUpperCase(),
                                       style: TextStyle(color: context.accent, fontWeight: T.bold)),
                                 ),
-                                title: Text('${m['sender'] ?? m['sender_id'] ?? 'Someone'}',
+                                title: Text('${m['sender_name'] ?? m['sender'] ?? m['sender_id'] ?? 'Someone'}',
                                     style: tt.titleSmall),
                                 subtitle: Text('${m['text'] ?? ''}', style: tt.bodyLarge),
                               ),
