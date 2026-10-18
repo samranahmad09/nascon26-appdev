@@ -1,0 +1,197 @@
+name: autograde
+
+# Every push to main: Day 1 ancestry, full stack up (API, media, Selenium Grid 4 hub + 3 nodes), backend contract
+# probes, the parallel Selenium suite, the k6 profile, the unit tests, and every report uploaded as an artifact.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autograde-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DAY1_BASE_SHA: e3ad1898b752dffde72d4d5f77f603d51320a21d
+  DAY1_SALT: ci-salt-1
+  DAY2_SALT: ci-salt-2
+  API_URL: http://localhost:8080
+  GRID_URL: http://localhost:4444
+  BASE_URL: http://backend:8080
+
+jobs:
+  autograde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Day 1 ancestry check
+        run: |
+          git merge-base --is-ancestor "$DAY1_BASE_SHA" HEAD
+          echo "HEAD $(git rev-parse HEAD) builds on Day 1 base $DAY1_BASE_SHA"
+
+      - name: Start the full stack
+        run: |
+          mkdir -p tests/reports
+          DAY1_SALT=ci-salt-1 DAY2_SALT=ci-salt-2 docker compose up -d --build
+          docker compose ps
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS "$API_URL/health"; then echo; exit 0; fi
+            sleep 2
+          done
+          echo "::error::GET /health did not return 200 within 180 s"
+          docker compose logs --no-color api | tail -100
+          exit 1
+
+      - name: Wait for Selenium Grid (ready, >= 3 nodes)
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS "$GRID_URL/status" | python3 -c 'import json,sys; v=json.load(sys.stdin)["value"]; print("ready", v["ready"], "nodes", len(v["nodes"])); sys.exit(0 if v["ready"] and len(v["nodes"]) >= 3 else 1)'; then exit 0; fi
+            sleep 2
+          done
+          echo "::error::Grid not ready with 3 nodes within 180 s"
+          docker compose logs --no-color selenium-hub | tail -50
+          exit 1
+
+      - name: Reset to the audit baseline
+        run: |
+          curl -fsS -X POST "$API_URL/audit/v1/reset" -H 'Content-Type: application/json' -d '{}'
+
+      - name: Backend contract probes
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.error, urllib.request
+
+          API = os.environ["API_URL"]
+          failures = []
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect)
+
+          def call(method, path, body=None, headers=None):
+              data = None if body is None else json.dumps(body).encode()
+              req = urllib.request.Request(API + path, data=data, method=method,
+                                           headers={"Content-Type": "application/json", **(headers or {})})
+              try:
+                  with opener.open(req, timeout=15) as res:
+                      return res.status, res.headers, res.read()
+              except urllib.error.HTTPError as err:
+                  return err.code, err.headers, err.read()
+
+          def probe(name, ok):
+              print(("PASS " if ok else "FAIL ") + name)
+              if not ok:
+                  failures.append(name)
+
+          def as_json(raw):
+              try:
+                  return json.loads(raw)
+              except ValueError:
+                  return {}
+
+          s, _, b = call("GET", "/health")
+          probe("GET /health -> 200", s == 200)
+
+          s, h, b = call("GET", "/metrics")
+          text = b.decode(errors="replace")
+          probe("GET /metrics -> 200 text/plain", s == 200 and h.get("Content-Type", "").startswith("text/plain"))
+          for metric in ("nascon_active_ws_connections", "nascon_active_streams_total", "nascon_stream_bitrate_kbps",
+                         "nascon_dlq_depth", "nascon_qr_scans_total"):
+              probe(f"/metrics exposes {metric}", re.search(rf"^{metric}(\{{.*\}})? ", text, re.M) is not None)
+
+          s, _, b = call("GET", "/audit/v1/score/match-m1")
+          probe("baseline match-m1 in progress", s == 200 and as_json(b).get("status") == "in_progress")
+
+          s, _, b = call("GET", "/audit/v1/qr/match-m1?inspect=true")
+          qr = as_json(b)
+          probe("GET /audit/v1/qr/match-m1 -> live target_route",
+                s == 200 and qr.get("target_route") == "/web/matches/match-m1/live")
+          probe("QR payload is signed", isinstance(qr.get("signature"), str) and len(qr.get("signature", "")) == 64)
+
+          s, h, _ = call("GET", "/q/m1-live")
+          probe("GET /q/m1-live -> 302 /web/matches/match-m1/live",
+                s == 302 and h.get("Location", "").endswith("/web/matches/match-m1/live"))
+
+          s, _, b = call("GET", "/audit/v1/qr/match-nope?inspect=true")
+          probe("unknown QR entity -> 404 QR_NOT_FOUND", s == 404 and as_json(b).get("error", {}).get("code") == "QR_NOT_FOUND")
+
+          s, _, b = call("POST", "/api/v1/chat", {"chat_room_id": "chat-match-m1", "text": "hi"},
+                         {"Authorization": "Bearer guest_anon_tok_7721"})
+          probe("guest chat write -> 403 GUEST_WRITE_FORBIDDEN",
+                s == 403 and as_json(b).get("error", {}).get("code") == "GUEST_WRITE_FORBIDDEN")
+
+          s, _, b = call("GET", "/web/matches/match-m1/live")
+          page = b.decode(errors="replace")
+          ids = sorted(re.findall(r'data-testid="([^"]+)"', page))
+          probe("guest web player exposes the 9 data-testids", s == 200 and ids == sorted([
+              "guest-video-player", "live-score-banner", "pinned-merch-card", "add-to-guest-cart-btn",
+              "guest-cart-count", "chat-message-list", "chat-input-field", "chat-send-btn", "progressive-auth-modal"]))
+
+          s, _, b = call("GET", "/web/api/matches/match-m1/overlay")
+          probe("web overlay helper -> 200", s == 200 and as_json(b).get("score_text") is not None)
+
+          if failures:
+              print(f"::error::{len(failures)} contract probe(s) failed: " + "; ".join(failures))
+              sys.exit(1)
+          PY
+
+      - name: Set up Python for the Selenium suite
+        if: ${{ !cancelled() }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Selenium Grid suite (pytest -n 3)
+        if: ${{ !cancelled() }}
+        run: |
+          pip install -q -r tests/selenium/requirements.txt
+          pytest -n 3 tests/selenium/ \
+            --junitxml=tests/reports/selenium-report.xml \
+            --html=tests/reports/selenium-report.html --self-contained-html
+
+      - name: k6 load profile (500 guests + 50 chat posters, 15 s)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          docker run --rm --network host -u "$(id -u):$(id -g)" -v "$PWD/tests:/tests" grafana/k6:0.54.0 \
+            run --summary-export=/tests/reports/k6-summary.json /tests/k6_load.js \
+            || { echo "::warning::k6 thresholds crossed (see tests/reports/k6-summary.json)"; exit 1; }
+
+      - name: Unit tests (Phase I + II)
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          docker compose exec -T api python -m pytest -q -p no:cacheprovider \
+            --ignore=tests/selenium --ignore=tests/appium --junitxml=/tmp/unit-report.xml
+          rc=$?
+          docker compose cp api:/tmp/unit-report.xml tests/reports/unit-report.xml
+          exit $rc
+
+      - name: Collect container logs
+        if: ${{ always() }}
+        run: docker compose logs --no-color > tests/reports/compose.log 2>&1 || true
+
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: autograde-reports
+          path: tests/reports/
+          if-no-files-found: warn
+
+      - name: Stop the stack
+        if: ${{ always() }}
+        run: docker compose down -v --remove-orphans || true
