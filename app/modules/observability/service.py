@@ -43,13 +43,14 @@ def erase_user(user_id: str) -> dict:
         raise not_found("PLAYER_NOT_FOUND", f"Player {user_id} does not exist.", {"user_id": user_id})
     with db.tx() as conn:
         player = conn.execute("SELECT player_id FROM players WHERE player_id = %s", (user_id,)).fetchone()
-        accounts = conn.execute("SELECT user_id FROM users WHERE user_id = %s OR player_id = %s ORDER BY user_id",
-                                (user_id, user_id)).fetchall()
+        accounts = conn.execute("SELECT user_id, player_id FROM users WHERE user_id = %s OR player_id = %s "
+                                "ORDER BY user_id", (user_id, user_id)).fetchall()
         if player is None and not accounts:
             raise not_found("PLAYER_NOT_FOUND", f"Player {user_id} does not exist.", {"user_id": user_id})
         ids = [user_id] + [a["user_id"] for a in accounts if a["user_id"] != user_id]
-        if player is not None:
-            conn.execute("UPDATE players SET name = %s WHERE player_id = %s", (ANON_PLAYER_NAME, user_id))
+        players = ([user_id] if player is not None else []) + sorted(
+            {a["player_id"] for a in accounts if a["player_id"] and a["player_id"] != user_id})
+        conn.execute("UPDATE players SET name = %s WHERE player_id = ANY(%s)", (ANON_PLAYER_NAME, players))
         for account in accounts:
             email = f"erased-{hashlib.sha256(uuid.uuid4().bytes).hexdigest()[:16]}@erased.invalid"
             conn.execute("UPDATE users SET email = %s, display_name = %s, password_hash = %s WHERE user_id = %s",

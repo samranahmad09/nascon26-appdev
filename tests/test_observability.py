@@ -35,6 +35,10 @@ def test_privacy_erasure_of_player_and_linked_account(fresh):
     posted = fresh.post("/api/v1/chat", json={"chat_room_id": "chat-cs-session-101", "text": "hello"},
                         headers={"Authorization": f"Bearer {token}"})
     assert posted.status_code == 201
+    flood = fresh.post("/api/v1/chat", json={"chat_room_id": "chat-cs-session-101", "text": "AAAA"},
+                       headers={"Authorization": f"Bearer {token}"})
+    assert flood.json()["blocked"] is True
+    assert db.fetchone("SELECT count(*) AS n FROM md_room_actions WHERE user_id = 'user-player'")["n"] == 1
     started = time.perf_counter()
     r = fresh.delete("/audit/v1/privacy/user/player-alpha-1")
     assert time.perf_counter() - started < 1.0
@@ -47,6 +51,7 @@ def test_privacy_erasure_of_player_and_linked_account(fresh):
     assert login(fresh, "player@nascon.test").status_code != 200
     msgs = fresh.get("/api/v1/chat/chat-cs-session-101/messages").json()["messages"]
     assert [(m["sender"], m["sender_name"], m["text"]) for m in msgs] == [("anonymized-user", "Anonymized User", "hello")]
+    assert db.fetchone("SELECT count(*) AS n FROM md_room_actions WHERE user_id = 'user-player'")["n"] == 0
     # idempotent
     again = fresh.delete("/audit/v1/privacy/user/player-alpha-1")
     assert again.status_code == 200 and again.json() == r.json()
@@ -56,6 +61,10 @@ def test_privacy_erasure_by_login_user_id(fresh):
     r = fresh.delete("/audit/v1/privacy/user/user-viewer")
     assert r.status_code == 200 and r.json() == {"user_id": "user-viewer", **EXPECTED}
     assert db.fetchone("SELECT display_name FROM users WHERE user_id = 'user-viewer'")["display_name"] == "Anonymized User"
+    # a login account linked to a player also anonymises that player record
+    assert fresh.delete("/audit/v1/privacy/user/user-player").status_code == 200
+    assert db.fetchone("SELECT name FROM players WHERE player_id = 'player-alpha-1'")["name"] == "Anonymized Player"
+    assert db.fetchone("SELECT name FROM players WHERE player_id = 'player-alpha-2'")["name"] != "Anonymized Player"
 
 
 @pytest.mark.parametrize("user_id", ["player-nobody", "guest_anon_tok_7721", "x" * 80, "bad id"])
