@@ -96,14 +96,30 @@ def pinned_product(conn, match_id: str | None) -> dict | None:
     return product_view(product)
 
 
-def playback_url(conn, entity_id: str) -> str | None:
+def _active_keys(conn, player_ids):
+    return optional("app.modules.streaming.service").active_keys(conn, player_ids)
+
+
+def playback_url(conn, entity_id: str, club_ids=()) -> str | None:
+    """HLS URL for a match: an entity-level stream if the streaming module offers one, else the live solo stream of
+    a player from either club (stream keys belong to players), else None and the page shows "stream starting"."""
     streaming = optional("app.modules.streaming.service")
+    if streaming is None:
+        return None
     for name in ("playback_url_for", "active_playback_url"):
         fn = getattr(streaming, name, None)
         if callable(fn):
             url = _guarded(conn, fn, entity_id)
             if isinstance(url, str) and url:
                 return url
+    if not (club_ids and hasattr(streaming, "active_keys") and hasattr(streaming, "playback_url")):
+        return None
+    players = [r["player_id"] for r in conn.execute(
+        "SELECT player_id FROM players WHERE club_id = ANY(%s) ORDER BY player_id", (list(club_ids),)).fetchall()]
+    keys = _guarded(conn, _active_keys, players) or {}
+    for player_id in players:
+        if player_id in keys:
+            return streaming.playback_url(keys[player_id])
     return None
 
 
@@ -121,7 +137,7 @@ def match_overlay(conn, match_id: str) -> dict | None:
         "away": _side(p["away"], names),
         "score_text": score_text(p["home"]["score"], p["away"]["score"]),
         "pinned_product": pinned_product(conn, p["match_id"]),
-        "playback_url": playback_url(conn, p["match_id"]),
+        "playback_url": playback_url(conn, p["match_id"], (p["home"]["team_id"], p["away"]["team_id"])),
         "chat_room_id": f"chat-{p['match_id']}",
         "ws_path": f"/ws/matches/{p['match_id']}",
     }
@@ -146,7 +162,8 @@ def costream_overlay(conn, session_id: str) -> dict:
         "active_participants": participants,
         "participant_names": names,
         "layout": (session or {}).get("layout"),
-        "playback_url": (session or {}).get("composite_playback_url"),
+        "playback_url": (session or {}).get("composite_playback_url")
+        if (session or {}).get("status") != "terminated" else None,
         "chat_room_id": (session or {}).get("chat_room_id") or f"chat-{session_id}",
         "match": match,
         "pinned_product": match["pinned_product"] if match else pinned_product(conn, None),

@@ -336,6 +336,7 @@
   function countOf(data) {
     if (!data) { return null; }
     if (typeof data.count === 'number') { return data.count; }
+    if (typeof data.total_items === 'number') { return data.total_items; }
     var items = data.items || (data.cart && data.cart.items);
     if (Array.isArray(items)) {
       return items.reduce(function (n, it) { return n + (parseInt(it.quantity, 10) || 0); }, 0);
@@ -387,7 +388,9 @@
     var saved = store.get(KEYS.count);
     if (saved !== null) { setCount(saved); }
     var tok = store.get(KEYS.guest);
-    if (tok && !memberToken()) {
+    if (memberToken()) {
+      memberCartCount().then(function (c) { if (c !== null) { setCount(c); } });
+    } else if (tok) {
       api('GET', '/api/v1/guest/cart', undefined, tok).then(function (r) {
         var c = r.ok ? countOf(r.data) : null;
         if (c !== null) { setCount(c + Object.keys(localCart()).reduce(function (n, k) { return n + localCart()[k]; }, 0)); }
@@ -485,9 +488,9 @@
     }).then(function (r) {
       if (r.ok) {
         el.chatInput.value = '';
-        var m = r.data && (r.data.message || r.data);
-        if (m && typeof m.text === 'string' && !(m.flagged && /flood|rate/.test(String(m.reason || '')))) { appendMessage(m); }
-        else if (m && m.flagged) { el.chatNote.textContent = 'Message held by moderation.'; }
+        var d = r.data || {};
+        if (d.blocked) { el.chatNote.textContent = 'Message held by moderation.'; return; }
+        if (d.message) { appendMessage(d.message); }
         return;
       }
       if (!member || r.status === 401) {
@@ -547,9 +550,15 @@
     });
   }
 
+  function memberCartCount() {
+    return api('GET', '/api/v1/cart', undefined, memberToken()).then(function (r) { return r.ok ? countOf(r.data) : null; });
+  }
+
   function afterLogin() {
     var guest = store.get(KEYS.guest);
-    var merged = guest ? mergeInto(memberToken(), guest) : Promise.resolve(null);
+    var merged = (guest ? mergeInto(memberToken(), guest) : Promise.resolve(null)).then(function (count) {
+      return count === null ? memberCartCount() : count;
+    });
     return merged.then(function (count) {
       if (count !== null && count !== undefined) { setCount(count); }
       closeModal();
