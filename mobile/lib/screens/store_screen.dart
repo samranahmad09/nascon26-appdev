@@ -477,6 +477,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String get cur => '${widget.lines.first.variant['currency'] ?? 'PKR'}';
 
   Future<void> _pay() async {
+    if (!svc.session.loggedIn) {
+      final go = await confirm(context,
+          title: 'Sign in to pay',
+          message: 'Browsing is free; paying needs an account so the order and receipt are yours.',
+          confirmLabel: 'Sign in',
+          icon: Icons.login);
+      if (go) navKey.currentState?.popUntil((r) => r.isFirst);
+      return;
+    }
     final card = _cards.firstWhere((c) => c.token == token);
     final ok = await confirm(context,
         title: 'Pay ${money(subtotal - discount, cur)}?',

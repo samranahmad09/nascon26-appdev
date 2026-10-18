@@ -12,6 +12,7 @@ import '../core/net.dart';
 import '../core/repo.dart';
 import '../ui/motion.dart';
 import '../ui/tokens.dart';
+import '../ui/video_tile.dart';
 import '../ui/widgets.dart';
 import 'store_screen.dart';
 
@@ -126,9 +127,10 @@ class _MatchScreenState extends State<MatchScreen> {
     _sub?.cancel();
     _ch?.sink.close();
     try {
-      final token = svc.session.token ?? '';
+      final token = svc.session.token ?? svc.guest.token ?? '';
+      // NFR-1 match channel: every accepted score event is pushed here.
       final uri = Uri.parse(
-          '${svc.settings.wsBase}/api/v1/ws?topic=match:${Uri.encodeComponent(widget.matchId)}&token=$token');
+          '${svc.settings.wsBase}/ws/matches/${Uri.encodeComponent(widget.matchId)}?token=$token');
       final ch = WebSocketChannel.connect(uri);
       _ch = ch;
       ch.ready.then((_) {
@@ -183,7 +185,11 @@ class _MatchScreenState extends State<MatchScreen> {
         : s != null
             ? '${(s['home'] as Map?)?['name']} v ${(s['away'] as Map?)?['name']}'
             : 'Match';
-    return Scaffold(
+    return Semantics(
+      identifier: 'screen-match-live',
+      label: 'Match live',
+      container: true,
+      child: Scaffold(
       appBar: brandBar(context, title),
       body: loading
           ? const SkeletonList(label: 'Loading match…', hero: true, count: 3)
@@ -193,7 +199,15 @@ class _MatchScreenState extends State<MatchScreen> {
                   _load();
                 })
               : RefreshIndicator(onRefresh: _load, child: _body(context)),
+      ),
     );
+  }
+
+  String? get playbackUrl {
+    final m = match ?? const {};
+    final s = m['stream'];
+    return (m['playback_url'] ?? m['stream_url'] ?? m['hls_url'] ?? m['video_url'] ??
+        (s is Map ? s['playback_url'] : null)) as String?;
   }
 
   Widget _body(BuildContext context) {
@@ -213,6 +227,20 @@ class _MatchScreenState extends State<MatchScreen> {
         padding: const EdgeInsets.only(bottom: T.s32),
         children: [
           if (loaded != null) DataBanner(loaded!),
+          if (playbackUrl != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(T.s16, T.s12, T.s16, 0),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: HlsTile(
+                  url: playbackUrl,
+                  label: 'Live video',
+                  placeholder: 'The match video is not live yet',
+                  muted: false,
+                  semanticsId: 'match-video',
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(T.s16, T.s12, T.s16, 0),
             child: ScoreHeader(m: m, names: names, live: live),
@@ -277,6 +305,7 @@ class ScoreHeader extends StatelessWidget {
           ]),
         );
     return Semantics(
+      identifier: 'live-score-banner',
       liveRegion: true,
       label: '$hn ${sideScore(home)}, $an ${sideScore(away)}. '
           '${status == 'in_progress' ? 'Live' : status == 'completed' ? 'Full time' : 'Not started'}.',

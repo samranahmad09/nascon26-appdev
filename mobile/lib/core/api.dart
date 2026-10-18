@@ -14,6 +14,9 @@ class Api {
   final Net net;
   String? Function() tokenOf;
   void Function()? onUnauthorized;
+  /// Fetches an anonymous read-only guest token when nobody is signed in (FR-4.2).
+  Future<String?> Function()? ensureGuest;
+  void Function()? onGuestRejected;
 
   Api(this.settings, this.net, this.tokenOf);
 
@@ -27,9 +30,15 @@ class Api {
     return h;
   }
 
-  Future<dynamic> get(String path, {bool auth = true}) => _send(
-      () => http.get(uri(path), headers: _headers(auth: auth)),
-      auth && path.startsWith('/api/v1'));
+  Future<dynamic> get(String path, {bool auth = true}) async {
+    if (auth && tokenOf() == null && ensureGuest != null) {
+      try {
+        await ensureGuest!();
+      } catch (_) {}
+    }
+    return _send(() => http.get(uri(path), headers: _headers(auth: auth)),
+        auth && path.startsWith('/api/v1'));
+  }
 
   Future<dynamic> post(String path, Object body,
           {bool auth = true, Duration timeout = const Duration(seconds: 15)}) =>
@@ -78,7 +87,10 @@ class Api {
           ? Map<String, dynamic>.from(err['details'] as Map)
           : <String, dynamic>{},
     );
-    if (r.statusCode == 401 && appRoute && tokenOf() != null) {
+    final usedGuest = (tokenOf() ?? '').startsWith('guest_');
+    if (r.statusCode == 401 && usedGuest) {
+      onGuestRejected?.call(); // expired guest token: fetch a fresh one next time
+    } else if (r.statusCode == 401 && appRoute && tokenOf() != null) {
       onUnauthorized?.call();
     }
     throw ex;

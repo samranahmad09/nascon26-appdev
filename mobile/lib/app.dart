@@ -17,7 +17,8 @@ class Services {
   final settings = Settings();
   final session = Session();
   late final net = Net(settings);
-  late final api = Api(settings, net, () => session.token);
+  late final api = Api(settings, net, () => session.token ?? guest.token);
+  final guest = GuestAuth();
   late final repo = Repo(api, session, settings);
   late final sync = SyncQueue(api, net, settings, session, repo);
   final cart = Cart();
@@ -32,6 +33,8 @@ class Services {
     session.addListener(() {
       if (!session.loggedIn) navKey.currentState?.popUntil((r) => r.isFirst);
     });
+    api.ensureGuest = () => guest.ensure(this);
+    api.onGuestRejected = () => guest.token = null;
     api.onUnauthorized = () {
       session.logout(reason: 'Your session has ended. Please sign in again.');
     };
@@ -51,6 +54,28 @@ class Services {
         await repo.prefetch();
       }
     });
+  }
+}
+
+/// Anonymous read-only viewer token (guest_anon_tok_*) used when nobody is signed in.
+class GuestAuth {
+  String? token;
+  Future<String?>? _inflight;
+
+  Future<String?> ensure(Services s) {
+    if (s.session.loggedIn || token != null) return Future.value(token);
+    return _inflight ??= _fetch(s).whenComplete(() => _inflight = null);
+  }
+
+  Future<String?> _fetch(Services s) async {
+    try {
+      final res = await s.api.post('/api/v1/guest/token', const <String, dynamic>{}, auth: false);
+      if (res is Map) {
+        final t = res['token'] ?? res['guest_token'] ?? res['access_token'];
+        if (t is String && t.isNotEmpty) token = t;
+      }
+    } catch (_) {}
+    return token;
   }
 }
 

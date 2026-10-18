@@ -7,6 +7,7 @@ import '../ui/motion.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'club_screen.dart';
+import 'creator_screen.dart';
 import 'fixtures_screen.dart';
 import 'roster_screen.dart';
 import 'scoring_screen.dart';
@@ -46,7 +47,10 @@ class _HomeShellState extends State<HomeShell> {
               () => const ScoringScreen())
         else if (s.role == 'club_manager')
           _Tab('Roster', Icons.manage_accounts_outlined, Icons.manage_accounts,
-              () => const RosterScreen()),
+              () => const RosterScreen())
+        else if (s.role == 'player')
+          _Tab('Go live', Icons.videocam_outlined, Icons.videocam,
+              () => const CreatorScreen(standalone: false)),
       ];
 
   @override

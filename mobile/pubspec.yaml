@@ -48,6 +48,8 @@ dependencies:
   open_filex: ^5.0.0
   share_plus: ^13.3.1
   crypto: ^3.0.7
+  mobile_scanner: ^7.4.2
+  video_player: ^2.14.1
 
 dev_dependencies:
   flutter_test:
