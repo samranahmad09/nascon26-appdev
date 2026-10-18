@@ -34,7 +34,7 @@ async def qr_metadata(request: Request):
     """The k6 path (500 VUs): a plain Starlette route, no FastAPI parameter solving, no threadpool hop
     when the answer is in memory."""
     entity_id = request.path_params["entity_id"]
-    inspect = request.query_params.get("inspect", "").strip().lower() in TRUE_WORDS
+    inspect = request.method == "HEAD" or request.query_params.get("inspect", "").strip().lower() in TRUE_WORDS
     if inspect:
         cached = service.inspect_cached(entity_id)
         if cached is not None:

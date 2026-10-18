@@ -102,6 +102,7 @@ def test_scan_count_increments_unless_inspect(fresh):
     for _ in range(3):
         assert qr(fresh, "match-m1", inspect="true").json()["scan_count"] == 2
     assert qr(fresh, "match-m1", inspect="1").json()["scan_count"] == 2
+    assert fresh.head("/audit/v1/qr/match-m1").status_code == 200  # HEAD never counts
     assert qr(fresh, "match-m1", inspect="false").json()["scan_count"] == 3
     fresh.post("/audit/v1/reset", json={})
     assert qr(fresh, "match-m1", inspect="true").json()["scan_count"] == 0
