@@ -10,6 +10,7 @@ read (logic.fold); there are no score counters.
 """
 import json
 import logging
+from collections.abc import Callable
 
 from ...core import queue, realtime
 from ...core.db import Jsonb
@@ -21,8 +22,8 @@ from ...core.validate import utc_now
 from ..sports import get_sport
 from . import logic
 
-__all__ = ["append_event", "match_version", "project", "register_league", "get_league", "league_projections",
-           "ApiError"]
+__all__ = ["append_event", "append_event_deferred", "match_version", "project", "register_league", "get_league",
+           "league_projections", "ApiError"]
 
 log = logging.getLogger("scoring")
 
@@ -103,6 +104,21 @@ def append_event(conn, body) -> tuple[int, dict]:
     Returns (201, response) for a new event or (200, stored_response) for an identical replay;
     raises ApiError for every 400 / 404 / 409.
     Order: schema 400 -> event_id idempotency (200 replay / 409 DUPLICATE_EVENT_ID) -> 404 -> 400 -> 409.
+    A new event is announced (match:{id} score_update + match_event) before this returns, i.e. inside
+    the caller's transaction; use append_event_deferred to announce after the commit instead.
+    """
+    status, response, announce = append_event_deferred(conn, body)
+    if announce is not None:
+        announce()
+    return status, response
+
+
+def append_event_deferred(conn, body) -> tuple[int, dict, Callable[[], None] | None]:
+    """append_event without the announcement: returns (status, response, announce).
+
+    Call announce() after the caller's transaction commits (still holding locks.GLOBAL, so announcements
+    keep log order); subscribers such as the QR target cache then never re-read a state the database does
+    not have yet. announce is None for an idempotent replay, which announces nothing.
     """
     event = logic.validate_event(body)
     prior = conn.execute("SELECT request, response FROM scoring_events WHERE event_id = %s",
@@ -110,7 +126,7 @@ def append_event(conn, body) -> tuple[int, dict]:
     if prior is not None:
         if prior["request"] == event["request"]:
             stored = prior["response"]
-            return 200, {k: stored[k] for k in _RESPONSE_KEYS}
+            return 200, {k: stored[k] for k in _RESPONSE_KEYS}, None
         raise conflict("DUPLICATE_EVENT_ID", f"Event {event['event_id']} was already recorded with a different body.",
                        {"event_id": event["event_id"]})
 
@@ -150,8 +166,7 @@ def append_event(conn, body) -> tuple[int, dict]:
          Jsonb(response), utc_now()))
     rows.append({"sequence": sequence, "event_id": event["event_id"], "type": kind, "payload": payload,
                  "signature": signature, "compensates": compensates})
-    _announce(stream, sport, rows, response, payload)
-    return 201, response
+    return 201, response, lambda: _announce(stream, sport, rows, response, payload)
 
 
 def match_version(conn, match_id: str) -> int | None:

@@ -18,8 +18,11 @@ def create_league(body=Depends(json_body)):
 
 @router.post("/audit/v1/events")
 def append_event(body=Depends(json_body)):
-    with locks.GLOBAL, db.tx() as conn:
-        status, result = service.append_event(conn, body)
+    with locks.GLOBAL:
+        with db.tx() as conn:
+            status, result, announce = service.append_event_deferred(conn, body)
+        if announce is not None:
+            announce()  # after the commit, still under the lock so announcements keep log order
     return JSONResponse(status_code=status, content=result)
 
 

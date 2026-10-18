@@ -1,7 +1,7 @@
 """Day 2 match status transitions on the event log: postponed / cancelled / abandoned (Part II edge case 2)."""
 import pytest
 
-from app.core import db, locks
+from app.core import db, locks, realtime
 from app.core.signing import sign
 from app.modules.scoring import service
 
@@ -123,3 +123,26 @@ def test_status_event_idempotency_and_validation(fresh):
     assert fields(fresh.post(EVENTS, json={**body, "event_id": new_id(), "type": "suspend"})) == ["type"]
     err(fresh.post(EVENTS, json={"event_id": new_id(), "match_id": "ghost", "type": "match_cancel"}), 404, "MATCH_NOT_FOUND")
     assert m.get()["version"] == 2
+
+
+def test_route_announces_after_commit_and_contract_function_inside_the_transaction(fresh, monkeypatch):
+    seen = []
+
+    def probe(topic, message):
+        match = message["match"]
+        committed = db.fetchone("SELECT count(*) AS n FROM scoring_events WHERE match_id = %s", (match["match_id"],))
+        seen.append((topic, match["status"], match["version"], committed["n"]))
+
+    monkeypatch.setattr(realtime, "publish", probe)
+    m = Match(fresh, DRAWS["sport_id"])
+    m.start()
+    postpone = m.body("match_postpone")
+    assert fresh.post(EVENTS, json=postpone).status_code == 201
+    assert fresh.post(EVENTS, json=postpone).status_code == 200
+    topic = f"match:{m.id}"
+    assert seen == [(topic, "upcoming", 1, 1), (topic, "in_progress", 2, 2), (topic, "postponed", 3, 3)]
+
+    with locks.GLOBAL, db.tx() as conn:
+        status, _ = service.append_event(conn, m.body("match_start"))
+    assert status == 201 and seen[-1] == (topic, "in_progress", 4, 3)
+    assert m.get()["version"] == 4
