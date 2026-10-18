@@ -9,5 +9,7 @@ MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "nascon-minio")
 MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "nascon-minio-secret")
 
+MEDIA_HOST = os.environ.get("MEDIA_HOST", "")
+
 MAX_BODY_BYTES = 1024 * 1024
 DEFAULT_SEED = 42

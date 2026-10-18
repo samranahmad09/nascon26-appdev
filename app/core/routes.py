@@ -43,11 +43,45 @@ def reset_state(seed: int = DEFAULT_SEED, stock: dict | None = None) -> dict:
     return {"status": "reset_complete", "seed": seed, "sports": sports, "tenants": tenants, "stock": final_stock}
 
 
+def redis_ok() -> bool:
+    try:
+        return bool(_redis_client().ping())
+    except Exception:
+        return False
+
+
+_redis = None
+
+
+def _redis_client():
+    global _redis
+    if _redis is None:
+        import redis
+        from .config import REDIS_URL
+        _redis = redis.Redis.from_url(REDIS_URL, socket_timeout=1, socket_connect_timeout=1)
+    return _redis
+
+
+def media_ok() -> bool:
+    """Media server reachable (skipped when MEDIA_HOST is unset, e.g. in unit-test runs)."""
+    from .config import MEDIA_HOST
+    if not MEDIA_HOST:
+        return True
+    import socket
+    try:
+        with socket.create_connection((MEDIA_HOST, 8888), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
 @router.get("/health")
 def health():
-    if is_seeded():
+    checks = {"database_seeded": is_seeded(), "redis": redis_ok(), "media": media_ok()}
+    if all(checks.values()):
         return {"status": "ok"}
-    return error_response(503, "NOT_READY", "Database not reachable or baseline data not seeded.")
+    return error_response(503, "NOT_READY", "A dependency is not ready yet.",
+                          {"failed": [name for name, ok in checks.items() if not ok]})
 
 
 @router.post("/audit/v1/reset")
