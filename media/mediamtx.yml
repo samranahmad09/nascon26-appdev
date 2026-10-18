@@ -1,11 +1,14 @@
-# NaSCon '26: MediaMTX 1.9.1 default configuration with two changes:
+# NaSCon '26: MediaMTX 1.9.1 default configuration with these changes (image bluenviron/mediamtx:1.9.1-ffmpeg):
 #   authMethod http -> the API's /internal/media/auth hook (only active stream keys may publish or play
 #     live/{stream_key}; revoked keys get 409 KEY_REVOKED; costream/{session_id} stays open until the
 #     session terminates)
 #   api yes (control API on :9997, reachable only inside the compose network) so the API can kick
-#     publishers within 2 s of a revoke or rotate and read stream stats for /metrics
-# media/costream.sh composes a session's live participants; it needs the bluenviron/mediamtx:1.9.1-ffmpeg
-# image plus a path entry:  "~^costream/(.+)$": {runOnDemand: sh /costream.sh $G1, runOnDemandRestart: yes}
+#     publishers within 2 s of a revoke or rotate, run co-stream composites and read stream stats
+#   hlsAlwaysRemux yes: an HLS muxer exists as soon as a stream is published, so the first
+#     GET /live/{key}/index.m3u8 or /costream/{id}/index.m3u8 is a 200 instead of a 404 while it starts
+#   co-stream composites: while a session is active the API adds a runOnInit path costream/{session_id}
+#     running /costream.sh (see app/modules/costream/composite.py); the regex entry below only serves
+#     non-HLS (WebRTC/RTSP) readers of a session the API has not started
 
 ###############################################
 # Global settings
@@ -311,7 +314,7 @@ hlsAllowOrigin: '*'
 hlsTrustedProxies: []
 # By default, HLS is generated only when requested by a user.
 # This option allows to generate it always, avoiding the delay between request and generation.
-hlsAlwaysRemux: no
+hlsAlwaysRemux: yes
 # Variant of the HLS protocol to use. Available options are:
 # * mpegts - uses MPEG-TS segments, for maximum compatibility.
 # * fmp4 - uses fragmented MP4 segments, more efficient.
@@ -708,6 +711,12 @@ paths:
   # example:
   # my_camera:
   #   source: rtsp://my_camera
+
+  # Fallback composite for non-HLS readers (WebRTC/RTSP) of a session the API has not started;
+  # HLS readers trigger the API's always-on runOnInit path instead (auth hook self-heal).
+  "~^costream/(.+)$":
+    runOnDemand: sh /costream.sh $G1
+    runOnDemandRestart: yes
 
   # Settings under path "all_others" are applied to all paths that
   # do not match another entry.

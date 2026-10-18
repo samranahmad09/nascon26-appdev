@@ -144,4 +144,10 @@ def session_status(conn, session_id: str) -> str | None:
     return row["status"] if row else None
 
 
-register(SCHEMA, ["cs_sessions"])
+def on_reset() -> None:
+    from . import composite
+
+    composite.submit(composite.stop_all)
+
+
+register(SCHEMA, ["cs_sessions"], on_reset=on_reset)

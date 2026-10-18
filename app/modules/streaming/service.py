@@ -195,9 +195,14 @@ def authorize(conn, request) -> None:
             raise conflict("KEY_REVOKED", f"Stream key {stream_key} has been revoked.", {"stream_key": stream_key})
         raise ApiError(401, "UNAUTHENTICATED", "Unknown stream key.", {"stream_key": stream_key})
     if path.startswith(COSTREAM_PREFIX) and len(path) > len(COSTREAM_PREFIX):
+        from ..costream import composite
+
         session_id = path[len(COSTREAM_PREFIX):]
-        if costream.session_status(conn, session_id) == "terminated":
+        status = costream.session_status(conn, session_id)
+        if status == "terminated":
             raise conflict("STREAM_TERMINATED", f"Co-stream {session_id} has terminated.", {"session_id": session_id})
+        if status == "active":
+            composite.heal(session_id)
         return
     raise ApiError(401, "UNAUTHENTICATED", "Publishing and playback are only allowed on live/ and costream/ paths.")
 

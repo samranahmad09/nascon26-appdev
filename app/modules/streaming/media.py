@@ -41,15 +41,19 @@ def api_get(path: str, timeout: float = 1.0):
         return None
 
 
-def api_post(path: str, timeout: float = 1.0) -> bool:
+def api_send(method: str, path: str, body: dict | None = None, timeout: float = 1.0) -> bool:
     base = _base_url()
     if base is None:
         return False
     try:
         with httpx.Client(base_url=base, timeout=timeout, transport=transport) as client:
-            return client.post(path).status_code == 200
+            return client.request(method, path, json=body).status_code == 200
     except Exception:
         return False
+
+
+def api_post(path: str, timeout: float = 1.0) -> bool:
+    return api_send("POST", path, timeout=timeout)
 
 
 def kick_paths(paths) -> int:

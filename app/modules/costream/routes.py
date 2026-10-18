@@ -9,7 +9,7 @@ from ...core.errors import not_found
 from ...core.validate import json_body
 from ..streaming import media
 from ..streaming import service as streaming
-from . import service
+from . import composite, service
 
 router = APIRouter()
 
@@ -22,10 +22,13 @@ def topic(session_id: str) -> str:
 
 
 def announce(result: dict) -> None:
-    """After a committed state change: refresh media auth, stop a terminated composite, notify sockets."""
+    """After a committed state change: refresh media auth, start or stop the composite, notify sockets."""
     streaming.invalidate_auth()
     if result["status"] == "terminated":
+        composite.submit(composite.stop, result["session_id"])
         media.sever([streaming.COSTREAM_PREFIX + result["session_id"]])
+    else:
+        composite.submit(composite.start, result["session_id"])
     realtime.publish(topic(result["session_id"]), {"type": "costream_update", "session": result})
 
 
