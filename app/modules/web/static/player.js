@@ -235,10 +235,8 @@
   function syncControls() {
     var v = el.video;
     el.play.setAttribute('aria-label', v.paused ? 'Play video' : 'Pause video');
-    el.play.setAttribute('aria-pressed', v.paused ? 'true' : 'false');
     el.play.innerHTML = v.paused ? ICON.play : ICON.pause;
     el.mute.setAttribute('aria-label', v.muted ? 'Unmute video' : 'Mute video');
-    el.mute.setAttribute('aria-pressed', v.muted ? 'true' : 'false');
     el.mute.innerHTML = v.muted ? ICON.muted : ICON.volume;
   }
   var ICON = {

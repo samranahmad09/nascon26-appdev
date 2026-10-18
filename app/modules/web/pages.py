@@ -176,8 +176,8 @@ def player_page(kind: str, entity_id: str, match: dict | None, product: dict | N
       </div>
     </div>
     <div class="controls" role="group" aria-label="Video controls">
-      <button type="button" class="ctl" id="ctl-play" aria-label="Pause video" aria-pressed="false">{icon("pause")}</button>
-      <button type="button" class="ctl" id="ctl-mute" aria-label="Unmute video" aria-pressed="true">{icon("muted")}</button>
+      <button type="button" class="ctl" id="ctl-play" aria-label="Pause video">{icon("pause")}</button>
+      <button type="button" class="ctl" id="ctl-mute" aria-label="Unmute video">{icon("muted")}</button>
       <button type="button" class="ctl ctl-live" id="ctl-live" aria-label="Jump to the live edge">Live</button>
       <button type="button" class="ctl" id="ctl-full" aria-label="Enter full screen">{icon("full")}</button>
     </div>
