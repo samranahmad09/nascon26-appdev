@@ -414,6 +414,18 @@ def test_sever_all_kicks_live_and_costream_paths(mediamtx, monkeypatch):
     assert seen == []
 
 
+def test_no_media_host_means_no_network(monkeypatch):
+    monkeypatch.setattr(media, "transport", None)
+    monkeypatch.setattr(config, "MEDIA_HOST", "")
+    media.reset_cache()
+    assert media.api_get("/v3/paths/list") is None
+    assert media.api_post("/v3/rtmpconns/kick/x") is False
+    assert media.media_ready() is False
+    media.reset_cache()
+    monkeypatch.setattr(config, "MEDIA_HOST", "media.test")
+    assert media._base_url() == "http://media.test:9997"
+
+
 def test_media_ready_route(client, mediamtx):
     mediamtx()
     assert client.get("/internal/media/ready").json() == {"media_ready": True}

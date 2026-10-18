@@ -2,19 +2,16 @@
 Every call is best effort with short timeouts: the media server being down never fails an API request."""
 import datetime as dt
 import logging
-import os
 import re
 import threading
 import time
 
 import httpx
 
-from ...core import metrics
+from ...core import config, metrics
 
 log = logging.getLogger("streaming.media")
 
-MEDIA_HOST = os.environ.get("MEDIA_HOST", "media")
-API_BASE = os.environ.get("MEDIA_API_URL", f"http://{MEDIA_HOST}:9997")
 CONN_KINDS = ("rtmpconns", "webrtcsessions", "rtspsessions", "srtconns")
 SECOND_SWEEP_S = 1.0
 READY_TTL_S = 2.0
@@ -24,9 +21,20 @@ METRICS_TTL_S = 1.0
 transport: httpx.BaseTransport | None = None
 
 
+def _base_url() -> str | None:
+    """The MediaMTX control API, or None when no media server is configured (MEDIA_HOST unset, as in
+    unit-test runs), so nothing waits on DNS for a host that is not there."""
+    if config.MEDIA_HOST:
+        return f"http://{config.MEDIA_HOST}:9997"
+    return "http://media:9997" if transport is not None else None
+
+
 def api_get(path: str, timeout: float = 1.0):
+    base = _base_url()
+    if base is None:
+        return None
     try:
-        with httpx.Client(base_url=API_BASE, timeout=timeout, transport=transport) as client:
+        with httpx.Client(base_url=base, timeout=timeout, transport=transport) as client:
             r = client.get(path)
         return r.json() if r.status_code == 200 else None
     except Exception:
@@ -34,8 +42,11 @@ def api_get(path: str, timeout: float = 1.0):
 
 
 def api_post(path: str, timeout: float = 1.0) -> bool:
+    base = _base_url()
+    if base is None:
+        return False
     try:
-        with httpx.Client(base_url=API_BASE, timeout=timeout, transport=transport) as client:
+        with httpx.Client(base_url=base, timeout=timeout, transport=transport) as client:
             return client.post(path).status_code == 200
     except Exception:
         return False
