@@ -618,6 +618,7 @@ def test_write_block_probe_uses_real_guard():
     from app.modules.qr_guest.routes import probe_write_block
     assert asyncio.run(probe_write_block("guest_anon_tok_7721")) == (True, 403)
     assert asyncio.run(probe_write_block("guest_ünïcode")) == (True, 403)
+    assert asyncio.run(probe_write_block("member-session-token")) == (False, 201)  # the guard lets members write
 
 
 # ---------------------------------------------------------------------------------------------

@@ -30,8 +30,10 @@ def _json(body: bytes) -> Response:
     return Response(content=body, media_type="application/json")
 
 
-@router.get("/audit/v1/qr/{entity_id}")
-async def qr_metadata(entity_id: str, request: Request):
+async def qr_metadata(request: Request):
+    """The k6 path (500 VUs): a plain Starlette route, no FastAPI parameter solving, no threadpool hop
+    when the answer is in memory."""
+    entity_id = request.path_params["entity_id"]
     inspect = request.query_params.get("inspect", "").strip().lower() in TRUE_WORDS
     if inspect:
         cached = service.inspect_cached(entity_id)
@@ -39,6 +41,9 @@ async def qr_metadata(entity_id: str, request: Request):
             return _json(cached)
     device = service.device_family(request.headers)
     return _json(await run_in_threadpool(service.qr_metadata, entity_id, not inspect, device))
+
+
+router.add_route("/audit/v1/qr/{entity_id}", qr_metadata, methods=["GET"])
 
 
 @router.get("/audit/v1/qr/{entity_id}/export.{fmt}")
@@ -60,28 +65,33 @@ def qr_analytics(entity_id: str):
 
 
 async def probe_write_block(guest_token: str) -> tuple[bool, int]:
-    """Send a simulated chat post carrying the guest token through the real GuestWriteBlock guard.
-    Returns (blocked with GUEST_WRITE_FORBIDDEN, status the guard answered with)."""
-    scope = {"type": "http", "http_version": "1.1", "method": "POST", "scheme": "http", "path": PROBE_PATH,
-             "raw_path": PROBE_PATH.encode(), "root_path": "", "query_string": b"",
-             "headers": [(b"authorization", f"Bearer {guest_token}".encode("utf-8")),
-                         (b"content-type", b"application/json")],
+    """Send a simulated chat post carrying the guest token through the real GuestWriteBlock guard, driven
+    as a plain ASGI app (works whether the guard is a BaseHTTPMiddleware or pure ASGI middleware).
+    Returns (blocked with GUEST_WRITE_FORBIDDEN before reaching the write, status the client got)."""
+    scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+             "scheme": "http", "path": PROBE_PATH, "raw_path": PROBE_PATH.encode(), "root_path": "",
+             "query_string": b"", "headers": [(b"authorization", f"Bearer {guest_token}".encode("utf-8")),
+                                              (b"content-type", b"application/json")],
              "server": ("backend", 8080), "client": ("127.0.0.1", 0)}
     reached = False
+    sent = []
 
-    async def write_endpoint(_request):
+    async def write_endpoint(scope, receive, send):
         nonlocal reached
         reached = True
-        return Response(status_code=201)
+        await Response(status_code=201)(scope, receive, send)
 
-    async def unused_app(scope, receive, send):  # pragma: no cover - dispatch() never forwards here
-        raise RuntimeError("probe must not reach the application")
+    async def receive():
+        return {"type": "http.request", "body": b'{"text": "probe"}', "more_body": False}
 
-    response = await GuestWriteBlock(unused_app).dispatch(Request(scope), write_endpoint)
-    code = None
-    if response.status_code == 403:
-        code = json.loads(response.body).get("error", {}).get("code")
-    return (not reached and code == "GUEST_WRITE_FORBIDDEN"), response.status_code
+    async def send(message):
+        sent.append(message)
+
+    await GuestWriteBlock(write_endpoint)(scope, receive, send)
+    status = next(m["status"] for m in sent if m["type"] == "http.response.start")
+    body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+    code = json.loads(body).get("error", {}).get("code") if status == 403 else None
+    return (not reached and code == "GUEST_WRITE_FORBIDDEN"), status
 
 
 @router.post("/audit/v1/guest/cart-merge")
