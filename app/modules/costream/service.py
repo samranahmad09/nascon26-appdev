@@ -105,13 +105,32 @@ def handle(conn, body) -> tuple[int, dict, bool]:
                           (req["session_id"],)).fetchone()
     if stored is not None and stored["request"] == req:
         return 200, stored["response"], False
+    store(conn, req, response)
+    return 201, response, True
+
+
+def store(conn, req: dict, response: dict) -> None:
     conn.execute(
         "INSERT INTO cs_sessions (session_id, request, response, status) VALUES (%s, %s, %s, %s) "
         "ON CONFLICT (session_id) DO UPDATE SET request = EXCLUDED.request, response = EXCLUDED.response, "
         "status = EXCLUDED.status, revision = cs_sessions.revision + 1, updated_at = now()",
         # json (not jsonb) keeps the response's key order for replays and get_session.
         (req["session_id"], Jsonb(req), Json(response), response["status"]))
-    return 201, response, True
+
+
+def host_left(conn, session_id: str, player_id: str) -> dict | None:
+    """Edge case 1 over WebSocket: the active host's last host socket closed. The session is re-evaluated
+    as a simulate_host_drop of its current active participants, so hosting moves to the next one in array
+    order (or the session terminates). Returns the new body, or None when player_id is not the active host."""
+    row = conn.execute("SELECT response FROM cs_sessions WHERE session_id = %s FOR UPDATE", (session_id,)).fetchone()
+    current = row["response"] if row else None
+    if current is None or current["status"] != "active" or current["active_host"] != player_id:
+        return None
+    req = {"session_id": session_id, "host_player_id": player_id, "participants": current["active_participants"],
+           "layout": current["layout"], "simulate_host_drop": True}
+    response = evaluate(conn, req)
+    store(conn, req, response)
+    return response
 
 
 def get_session(conn, session_id: str) -> dict | None:

@@ -1,11 +1,14 @@
+import asyncio
 import hashlib
 import hmac
 import json
+import time
 
 import pytest
+from fastapi import WebSocketDisconnect
 
 from app.core import config, db, realtime
-from app.modules.costream import service
+from app.modules.costream import routes, service
 from app.modules.streaming import media
 
 URL = "/audit/v1/costream/session"
@@ -288,6 +291,90 @@ def test_composite_inputs_lists_live_participants_in_order(fresh, severed, publi
     assert r.status_code == 200
     assert r.text == "live/sk_live_aaaaaaaaaaaaaaaa\nlive/sk_live_cccccccccccccccc"
     assert fresh.get("/internal/costream/cs-nope/inputs").text == ""
+
+
+def stored(session_id):
+    with db.tx() as conn:
+        return service.get_session(conn, session_id)
+
+
+def wait_for(predicate, timeout=3.0):
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return predicate()
+
+
+HOST_WS = "/ws/costream/cs-session-101?player_id=player-alpha-1&role=host"
+
+
+def test_host_socket_disconnect_hands_off_and_notifies_viewers(fresh, severed):
+    fresh.post(URL, json={**SPEC, "simulate_host_drop": False})
+    with fresh.websocket_connect("/ws/costream/cs-session-101") as viewer:
+        first = viewer.receive_json()
+        assert first["type"] == "costream_state" and first["session"]["active_host"] == "player-alpha-1"
+        with fresh.websocket_connect(HOST_WS) as host:
+            assert host.receive_json()["session"]["participant_count"] == 4
+            host.send_text("still here")
+        update = viewer.receive_json()
+    assert update["topic"] == "costream:cs-session-101" and update["type"] == "costream_update"
+    session = update["session"]
+    assert session["active_host"] == "player-alpha-2" and session["handoff_occurred"] is True
+    assert session["participant_count"] == 3
+    assert session["active_participants"] == ["player-alpha-2", "player-beta-1", "player-beta-2"]
+    assert session["chat_room_id"] == "chat-cs-session-101"
+    assert session["signature"] == raw_sig(session)
+    assert stored("cs-session-101") == session
+
+
+def test_only_the_active_hosts_last_socket_hands_off(fresh, severed):
+    fresh.post(URL, json={**SPEC, "simulate_host_drop": False})
+    with fresh.websocket_connect(HOST_WS) as first:
+        first.receive_json()
+        with fresh.websocket_connect(HOST_WS) as second:
+            second.receive_json()
+        with fresh.websocket_connect("/ws/costream/cs-session-101?player_id=player-alpha-1") as viewer:
+            viewer.receive_json()
+        with fresh.websocket_connect("/ws/costream/cs-session-101?player_id=player-beta-1&role=host") as other:
+            other.receive_json()
+        time.sleep(0.3)
+        assert stored("cs-session-101")["active_host"] == "player-alpha-1"
+    assert wait_for(lambda: stored("cs-session-101")["active_host"] == "player-alpha-2")
+
+
+def test_sole_host_socket_disconnect_terminates(fresh, severed):
+    fresh.post(URL, json={"session_id": "cs-one", "host_player_id": "player-alpha-1",
+                          "participants": ["player-alpha-1"], "layout": "solo"})
+    with fresh.websocket_connect("/ws/costream/cs-one?player_id=player-alpha-1&role=host") as host:
+        host.receive_json()
+    assert wait_for(lambda: stored("cs-one")["status"] == "terminated")
+    assert wait_for(lambda: severed == [["costream/cs-one"]])
+
+
+def test_socket_for_unknown_session(fresh, severed):
+    with fresh.websocket_connect("/ws/costream/cs-nope?player_id=player-alpha-1&role=host") as ws:
+        assert ws.receive_json() == {"topic": "costream:cs-nope", "type": "costream_state", "session": None}
+    with db.tx() as conn:
+        assert service.host_left(conn, "cs-nope", "player-alpha-1") is None
+
+
+class DroppedSocket:
+    query_params = {"player_id": "player-alpha-1", "role": "host"}
+
+    async def accept(self):
+        pass
+
+    async def send_json(self, data):
+        raise WebSocketDisconnect(1006)
+
+    async def receive(self):
+        return {"type": "websocket.disconnect"}
+
+
+def test_host_dropping_before_first_frame_still_hands_off(fresh, severed):
+    fresh.post(URL, json={**SPEC, "simulate_host_drop": False})
+    asyncio.run(routes.costream_socket(DroppedSocket(), "cs-session-101"))
+    assert wait_for(lambda: stored("cs-session-101")["active_host"] == "player-alpha-2")
 
 
 def test_guest_token_cannot_create_sessions(fresh):
