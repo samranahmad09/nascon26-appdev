@@ -8,6 +8,8 @@ import '../core/session.dart';
 import '../core/storage.dart';
 import '../ui/tokens.dart';
 import '../ui/widgets.dart';
+import 'home_shell.dart';
+import 'qr_scan_screen.dart';
 import 'settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -160,6 +162,35 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: const Text('Change'),
                   ),
                 ]),
+                const SizedBox(height: T.s8),
+                Row(children: [
+                  Expanded(
+                    child: Semantics(
+                      identifier: 'login-scan-qr',
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context)
+                            .push(MaterialPageRoute(builder: (_) => const QrScanScreen())),
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Scan QR'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: T.s12),
+                  Expanded(
+                    child: Semantics(
+                      identifier: 'login-guest',
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context)
+                            .push(MaterialPageRoute(builder: (_) => const HomeShell())),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Browse'),
+                      ),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: T.s8),
+                Text('Browsing and scanning need no account; sign in to buy, chat or manage.',
+                    textAlign: TextAlign.center, style: tt.bodySmall),
                 const SizedBox(height: T.s8),
                 Card(
                   child: ExpansionTile(

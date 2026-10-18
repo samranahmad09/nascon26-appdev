@@ -38,3 +38,28 @@ Build: `flutter build apk --release` inside `mobile/`, then copy
 
 `lib/core/sample_data.dart` holds clearly labelled sample data used during development before the server routes
 existed. It is off by default (`Settings.useSampleData`) and only ever applies to a route that 404s as missing.
+
+## Phase II (Day 2)
+
+* **Deep links**: `nascon://entity/{match-*|club-*|player-*|cs-session-*}` and `nascon://stream/{cs-session-*}`
+  (exact intent-filter in `AndroidManifest.xml`). `MainActivity` hands the cold-start link and every
+  warm-start link (`onNewIntent`) to Dart over the `nascon/links` channel; `lib/core/links.dart` routes them.
+  Flutter's own deep linking is turned off so it cannot race the router.
+* **Guest mode (FR-4.2)**: with nobody signed in, reads fetch an anonymous token from
+  `POST /api/v1/guest/token` (`GuestAuth` in `lib/app.dart`). Deep links, QR scans and "Browse" never
+  stop on the login screen; writes (chat, checkout) ask the user to sign in.
+* **Match Live**: score over `ws://{host}/ws/matches/{id}`, video tile when the match has a playback URL.
+* **Co-Stream (FR-3.3)**: `lib/screens/costream_screen.dart`; grid_2 / grid_4 / spotlight / composite views of HLS
+  tiles (`lib/ui/video_tile.dart`, placeholder while a participant is not live) and the unified chat
+  `chat-{session_id}` (history + `/api/v1/ws?topic=chat:{room}` + `POST /api/v1/chat`).
+* **QR scanner**: `lib/screens/qr_scan_screen.dart` (mobile_scanner). Short URLs `/q/{code}` are resolved by
+  following the server's 302; `nascon://` and `/web/...` URLs map straight to screens.
+* **Go live (FR-3.2)**: `lib/screens/creator_screen.dart`: stream key generate / rotate / revoke via
+  `POST /audit/v1/stream/key`, RTMP + WHIP ingest URLs, HLS preview, viewer QR. Publishing is done from OBS
+  (RTMP or WHIP).
+* **Appium ids**: key widgets carry `Semantics(identifier: ...)`, exposed to UiAutomator as resource-ids:
+  `screen-match-live`, `match-score`, `screen-costream`, `costream-tile-{i}`, `chat-message-list`,
+  `chat-input`, `chat-send`, `screen-qr-scanner`, `screen-creator`, `screen-player`, `login-guest`,
+  `login-scan-qr`, and `title-{screen-title}` on every app bar title.
+* Media URLs that say `localhost` are rewritten to the configured server host (or kept on 127.0.0.1 with
+  `adb reverse tcp:8888 tcp:8888` over USB).

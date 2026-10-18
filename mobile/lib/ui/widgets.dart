@@ -238,7 +238,11 @@ PreferredSizeWidget brandBar(BuildContext context, String title,
         const SizedBox(width: T.s12),
       ],
       Expanded(
-        child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        child: Semantics(
+          identifier: 'title-${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
+          header: true,
+          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
       ),
     ]),
     actions: [

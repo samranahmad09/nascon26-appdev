@@ -10,6 +10,7 @@ import '../ui/tokens.dart';
 import '../ui/widgets.dart';
 import 'home_shell.dart';
 import 'match_screen.dart';
+import 'qr_scan_screen.dart';
 
 /// Loads the league list and the data for the selected league in one go.
 Future<Loaded> loadForLeague(Future<Loaded> Function(String leagueId) inner,
@@ -39,7 +40,7 @@ class FixturesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = context.watch<Settings>();
     return Scaffold(
-      appBar: brandBar(context, 'Fixtures', actions: const [ProfileButton()]),
+      appBar: brandBar(context, 'Fixtures', actions: const [ScanButton(), ProfileButton()]),
       body: LoadedView(
         key: ValueKey('fx-${settings.leagueId}'),
         loadingText: 'Loading fixtures…',
