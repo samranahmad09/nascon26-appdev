@@ -70,3 +70,13 @@ def test_score_event_reaches_match_websocket(fresh):
         assert r.status_code == 201, r.text
         msg = ws.receive_json()
         assert msg["type"] == "score_update" and msg["match"]["away"]["score"] == 1
+
+
+def test_health_reports_failed_dependencies(fresh, monkeypatch):
+    from app.core import config, routes
+    monkeypatch.setattr(config, "MEDIA_HOST", "127.0.0.1")  # nothing listens on 8888 inside the test container
+    r = fresh.get("/health")
+    assert r.status_code == 503 and r.json()["error"]["details"]["failed"] == ["media"]
+    monkeypatch.setattr(config, "MEDIA_HOST", "")
+    monkeypatch.setattr(routes, "redis_ok", lambda: False)
+    assert fresh.get("/health").json()["error"]["details"]["failed"] == ["redis"]
