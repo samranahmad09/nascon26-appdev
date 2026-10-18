@@ -2,16 +2,26 @@
 under /web/api/* that need no token. Nothing here writes; guest writes go to the /api/v1 routes and are refused
 there by GuestWriteBlock."""
 import hashlib
+import os
+import re
 from pathlib import Path
 
-from fastapi import APIRouter
+import httpx
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from ...core import db
-from ...core.errors import not_found
+from ...core.errors import ApiError, not_found
 from . import pages, service
 
 router = APIRouter()
+
+# Browsers that cannot reach the media server's own port (Selenium Grid nodes, phones behind the venue Wi-Fi) play
+# HLS through this origin instead: /web/hls/live/{key}/... is fetched from the media server's HLS port.
+MEDIA_HLS = f"http://{os.environ.get('MEDIA_HOST', 'media')}:8888"
+HLS_PATH = re.compile(r"(live|costream)/[A-Za-z0-9_.\-]{1,128}/[A-Za-z0-9_.\-]{1,128}\.(m3u8|ts|mp4|m4s)")
+HLS_TYPES = {"m3u8": "application/vnd.apple.mpegurl", "ts": "video/mp2t", "mp4": "video/mp4", "m4s": "video/iso.segment"}
+_hls_client: httpx.AsyncClient | None = None
 
 STATIC_DIR = Path(__file__).with_name("static")
 MEDIA_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -35,6 +45,23 @@ def static_asset(name: str):
     body, media_type = found
     return Response(content=body, media_type=media_type,
                     headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
+
+
+@router.get("/web/hls/{path:path}")
+async def hls_proxy(path: str, request: Request):
+    global _hls_client
+    if not HLS_PATH.fullmatch(path):
+        raise not_found("STREAM_NOT_FOUND", "No such stream file.", {"path": path})
+    if _hls_client is None:
+        _hls_client = httpx.AsyncClient(timeout=15.0)
+    try:
+        upstream = await _hls_client.get(f"{MEDIA_HLS}/{path}", params=dict(request.query_params))
+    except httpx.HTTPError:
+        raise ApiError(502, "MEDIA_UNAVAILABLE", "The media server is not reachable.")
+    kind = path.rsplit(".", 1)[1]
+    return Response(content=upstream.content, status_code=upstream.status_code,
+                    media_type=upstream.headers.get("content-type", HLS_TYPES[kind]),
+                    headers={"Cache-Control": upstream.headers.get("cache-control", "no-cache")})
 
 
 # ------------------------------------------------------------------------------------------------

@@ -3,10 +3,12 @@ import json
 import re
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.core import db
 from app.modules.store import service as store
+from app.modules.web import routes
 from app.modules.web import service as web
 
 TESTIDS = {"guest-video-player", "live-score-banner", "pinned-merch-card", "add-to-guest-cart-btn", "guest-cart-count",
@@ -266,6 +268,53 @@ def test_static_assets_are_served_from_versioned_urls(fresh):
     assert hls.status_code == 200 and len(hls.content) > 100_000
     assert fresh.get("/web/static/nope.js").json()["error"]["code"] == "ASSET_NOT_FOUND"
     assert fresh.get("/web/static/..%2Froutes.py").status_code == 404
+
+
+# ---------------------------------------------------------------------------------------------
+# HLS proxy for viewers that cannot reach the media server port
+# ---------------------------------------------------------------------------------------------
+
+def test_hls_proxy_only_serves_stream_files(fresh):
+    r = fresh.get("/web/hls/live/abc/evil.sh")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "STREAM_NOT_FOUND"
+    assert fresh.get("/web/hls/other/abc/index.m3u8").status_code == 404
+
+
+def test_hls_proxy_passes_playlists_through(fresh, monkeypatch):
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        return httpx.Response(200, text="#EXTM3U\n", headers={"content-type": "application/vnd.apple.mpegurl"})
+
+    monkeypatch.setattr(routes, "_hls_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    r = fresh.get("/web/hls/live/abc/index.m3u8", params={"_HLS_msn": "3"})
+    assert r.status_code == 200 and r.text.startswith("#EXTM3U")
+    assert r.headers["content-type"].startswith("application/vnd.apple.mpegurl")
+    assert seen["url"] == f"{routes.MEDIA_HLS}/live/abc/index.m3u8?_HLS_msn=3"
+
+
+def test_hls_proxy_reports_an_unreachable_media_server(fresh, monkeypatch):
+    monkeypatch.setattr(routes, "MEDIA_HLS", "http://127.0.0.1:9")
+    monkeypatch.setattr(routes, "_hls_client", None)
+    r = fresh.get("/web/hls/costream/cs-session-101/index.m3u8")
+    assert r.status_code == 502 and r.json()["error"]["code"] == "MEDIA_UNAVAILABLE"
+
+
+def test_match_video_comes_from_a_club_players_live_key(fresh, monkeypatch):
+    class Streaming:
+        @staticmethod
+        def active_keys(conn, player_ids):
+            return {"player-alpha-2": "key-a2"} if "player-alpha-2" in player_ids else {}
+
+        @staticmethod
+        def playback_url(key):
+            return f"http://localhost:8888/live/{key}/index.m3u8"
+
+    real = web.optional
+    monkeypatch.setattr(web, "optional", lambda path: Streaming if path.endswith("streaming.service") else real(path))
+    o = fresh.get("/web/api/matches/match-m1/overlay").json()
+    assert o["playback_url"] == "http://localhost:8888/live/key-a2/index.m3u8"
 
 
 # ---------------------------------------------------------------------------------------------

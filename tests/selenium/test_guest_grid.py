@@ -1,5 +1,6 @@
 """Guest Web Player on Selenium Grid 4 (6.2.3 tests 1-3, plus the NFR-8 DOM inspection). Each test starts a fresh
 browser, so each one is a fresh guest; run in parallel with `pytest -n 3 tests/selenium/`."""
+import os
 import re
 import time
 import uuid
@@ -13,6 +14,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from grid import BASE_URL, api, raw_redirect
 
 LIVE_PATH = "/web/matches/match-m1/live"
+# Demo member seeded by /audit/v1/reset (app/core/seed_data.json); override for other environments.
+MEMBER_EMAIL = os.environ.get("MEMBER_EMAIL", "viewer@nascon.test")
+MEMBER_PASSWORD = os.environ.get("MEMBER_PASSWORD", "Nascon@26")
 TESTIDS = {"guest-video-player", "live-score-banner", "pinned-merch-card", "add-to-guest-cart-btn", "guest-cart-count",
            "chat-message-list", "chat-input-field", "chat-send-btn", "progressive-auth-modal"}
 SCORE = re.compile(r"^(\d+) - (\d+)$")
@@ -111,6 +115,27 @@ def test_3_guest_cart_and_realtime_score(driver, live_match):
     WebDriverWait(driver, 0.5, poll_frequency=0.02).until(lambda d: banner.text.strip() != before)
     new_home = int(SCORE.match(banner.text.strip()).group(1))
     assert new_home > old_home
+
+
+def test_5_login_from_the_modal_merges_the_cart_and_sends_the_chat(driver, live_match):
+    """FR-4.4: logging in from the progressive modal keeps the staged cart and completes the blocked write."""
+    wait = open_live(driver)
+    wait.until(EC.element_to_be_clickable(tid("add-to-guest-cart-btn"))).click()
+    count = driver.find_element(*tid("guest-cart-count"))
+    WebDriverWait(driver, 5).until(lambda d: count.text.strip() == "1")
+
+    text = f"Member cheer {uuid.uuid4().hex[:8]}"
+    driver.find_element(*tid("chat-input-field")).send_keys(text)
+    driver.find_element(*tid("chat-send-btn")).click()
+    modal = wait.until(EC.visibility_of_element_located(tid("progressive-auth-modal")))
+    modal.find_element(By.ID, "auth-email").send_keys(MEMBER_EMAIL)
+    modal.find_element(By.ID, "auth-password").send_keys(MEMBER_PASSWORD + Keys.ENTER)
+
+    wait.until(EC.invisibility_of_element_located(tid("progressive-auth-modal")))
+    assert driver.execute_script("return sessionStorage.getItem('nascon.member_token');")
+    WebDriverWait(driver, 5).until(lambda d: int(count.text.strip() or 0) >= 1)
+    chat = driver.find_element(*tid("chat-message-list"))
+    WebDriverWait(driver, 5).until(lambda d: text in chat.text)
 
 
 def test_4_accessibility_dom(driver, live_match):

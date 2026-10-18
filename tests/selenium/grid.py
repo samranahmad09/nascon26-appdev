@@ -4,9 +4,25 @@ import os
 import urllib.error
 import urllib.request
 
-GRID_URL = os.environ.get("GRID_URL", "http://localhost:4444").rstrip("/")
+
+def _first_reachable(env: str, candidates: tuple[tuple[str, str], ...]) -> str:
+    """The env value if set; else the first candidate that answers (host run first, then inside compose)."""
+    if os.environ.get(env):
+        return os.environ[env].rstrip("/")
+    for url, probe in candidates:
+        try:
+            with urllib.request.urlopen(url + probe, timeout=2):
+                return url
+        except urllib.error.HTTPError:
+            return url
+        except OSError:
+            continue
+    return candidates[0][0]
+
+
+GRID_URL = _first_reachable("GRID_URL", (("http://localhost:4444", "/status"), ("http://selenium-hub:4444", "/status")))
+API_URL = _first_reachable("API_URL", (("http://localhost:8080", "/health"), ("http://backend:8080", "/health")))
 BASE_URL = os.environ.get("BASE_URL", "http://backend:8080").rstrip("/")
-API_URL = os.environ.get("API_URL", "http://localhost:8080").rstrip("/")
 BROWSERS = [b.strip() for b in os.environ.get("SELENIUM_BROWSERS", "chrome,firefox").split(",") if b.strip()]
 
 

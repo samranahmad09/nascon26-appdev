@@ -1,9 +1,9 @@
 """Selenium Grid 4 harness for the Guest Web Player (6.2.3). Every test opens its own remote browser and needs
 nothing from another test, so the suite runs in parallel: `pytest -n 3 tests/selenium/`.
 
-GRID_URL           Selenium hub (default http://localhost:4444)
+GRID_URL           Selenium hub (default http://localhost:4444, else http://selenium-hub:4444 inside compose)
 BASE_URL           backend as the browser containers reach it (default http://backend:8080, the compose alias)
-API_URL            backend as this test process reaches it (default http://localhost:8080)
+API_URL            backend as this test process reaches it (default http://localhost:8080, else http://backend:8080)
 SELENIUM_BROWSERS  browsers each test runs in (default chrome,firefox)
 
 The suite never resets the backend; it expects the /audit/v1/reset baseline (match-m1 in progress).

@@ -193,7 +193,7 @@ def player_page(kind: str, entity_id: str, match: dict | None, product: dict | N
       <form id="chat-form" class="chat-form" autocomplete="off" novalidate>
         <label for="chat-input" class="sr-only">Chat message</label>
         <input data-testid="chat-input-field" id="chat-input" class="input" type="text" maxlength="280"
-               placeholder="Say something to the crowd" aria-label="Chat message">
+               placeholder="Chat with fans" aria-label="Chat message">
         <button data-testid="chat-send-btn" id="chat-send" class="btn primary" type="submit"
                 aria-label="Send chat message">Send</button>
       </form>

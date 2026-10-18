@@ -193,13 +193,13 @@
     }
     return hlsLoader;
   }
-  /* Playback URLs name the media server as localhost; a phone on the venue LAN reaches it on this page's host. */
+  /* Playback URLs name the media server as localhost. Any other viewer (a phone on the venue Wi-Fi, a Selenium
+     Grid node) plays the same stream through this origin's /web/hls proxy. */
   function reachable(url) {
     try {
       var u = new URL(url, location.href);
-      if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && location.hostname !== u.hostname) {
-        u.hostname = location.hostname;
-      }
+      var here = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!here && /^\/(live|costream)\//.test(u.pathname)) { return '/web/hls' + u.pathname + u.search; }
       return u.toString();
     } catch (e) { return url; }
   }
