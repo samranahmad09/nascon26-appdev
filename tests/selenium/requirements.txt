@@ -1,0 +1,4 @@
+selenium==4.25.0
+pytest==8.3.4
+pytest-xdist==3.6.1
+pytest-html==4.1.1
