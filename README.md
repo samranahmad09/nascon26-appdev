@@ -89,5 +89,6 @@ Deep links on the phone: `adb shell am start -W -a android.intent.action.VIEW -d
 | k6 (NFR-2) | `k6 run --summary-export=tests/reports/k6-summary.json tests/k6_load.js` (on Docker Desktop: `docker run --rm -i --network container:<api-container> grafana/k6:0.54.0 run - < tests/k6_load.js`) | `tests/reports/k6-summary.json` |
 | CI | `.github/workflows/autograde.yml` on every push to `main` | Actions artifacts |
 
-Measured on the team laptop (single API worker): k6 NFR-2 profile 3,597 req/s, p95 195 ms, 0% errors;
-Selenium 10/10; Appium 9/9 on a Galaxy S25 Ultra.
+Measured on the team laptop on the final stack (single API worker): k6 NFR-2 profile 3,840 req/s, p95 115 ms,
+0% errors; Selenium 10/10; Appium 9/9 on a Galaxy S25 Ultra; 1246 unit and contract tests passing; the GitHub
+Actions `autograde` workflow green on a clean Ubuntu runner.
