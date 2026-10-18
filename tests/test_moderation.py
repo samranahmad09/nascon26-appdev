@@ -199,7 +199,7 @@ def test_ten_simultaneous_identical_requests(fresh):
         body = r.json()
         assert body["kicked_users"] == ["user-spammer"] and body["muted_users"] == ["user-flooder"]
         assert body["signature"] == raw_signature(ROOM, 1, ["user-spammer"], body["dlq_status"]["queue_depth"])
-    assert depths[-1] == 20 and depths[0] >= 2
+    assert depths == list(range(2, 21, 2))  # each enqueue + read is atomic, so every response is distinct
     assert bus.depth() == 20
     kicks = db.fetchall("SELECT user_id FROM md_room_actions WHERE chat_room_id = %s AND action = 'kick'", (ROOM,))
     assert [k["user_id"] for k in kicks] == ["user-spammer"]
@@ -215,6 +215,7 @@ def test_ten_threads_kicking_the_same_spammer_with_distinct_messages(fresh):
         responses = list(pool.map(fire, range(10)))
     assert all(r.status_code == 200 and r.json()["kicked_users"] == ["user-spammer"] for r in responses)
     assert all(r.json()["filtered_messages"][0]["text"] == "***" for r in responses)
+    assert sorted(r.json()["dlq_status"]["queue_depth"] for r in responses) == list(range(1, 11))
     assert bus.depth() == 10
 
 

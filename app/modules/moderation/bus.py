@@ -29,6 +29,7 @@ log = logging.getLogger("moderation.bus")
 MAX_ATTEMPTS = 3
 BACKOFF_BASE_S = float(os.environ.get("NASCON_DLQ_BACKOFF_S", "0.01"))
 LIST_LIMIT = 500
+DLQ_LOCK_KEY = 5_208_001
 _sleep = time.sleep
 
 SCHEMA = """
@@ -59,9 +60,10 @@ def _attempt(note: dict) -> None:
     realtime.publish(note["topic"], {"type": note["event_type"], **note["payload"]})
 
 
-def deliver(notes: list[dict]) -> list[dict]:
+def deliver(notes: list[dict], dead_letter_now: bool = True) -> list[dict]:
     """Every note gets up to MAX_ATTEMPTS tries; all notes still failing after a round wait out the same
-    backoff together, so N simulated failures cost one backoff schedule, not N."""
+    backoff together, so N simulated failures cost one backoff schedule, not N. With dead_letter_now False
+    the caller writes the failures itself (inside its own transaction)."""
     pending = notes
     for attempt in range(1, MAX_ATTEMPTS + 1):
         failed = []
@@ -79,8 +81,9 @@ def deliver(notes: list[dict]) -> list[dict]:
             break
         if attempt < MAX_ATTEMPTS:
             _sleep(BACKOFF_BASE_S * 2 ** (attempt - 1))
-    if pending:
-        dead_letter(pending)
+    if pending and dead_letter_now:
+        with db.tx() as conn:
+            dead_letter(conn, pending)
     return notes
 
 
@@ -103,15 +106,17 @@ def notify_costream_invite(session_id: str, player_id: str, invite: dict, simula
                     make_note(f"costream:{session_id}", "costream_invite", payload, simulate_dlq)])
 
 
-def dead_letter(notes: list[dict]) -> None:
+def dead_letter(conn, notes: list[dict]) -> None:
+    """Appends failed notes to the DLQ under a transaction-scoped advisory lock, so a writer that inserts and
+    then reads the depth in the same transaction sees a distinct, exact counter value (edge case 3)."""
+    conn.execute("SELECT pg_advisory_xact_lock(%s)", (DLQ_LOCK_KEY,))
     at = now_iso()
-    with db.tx() as conn:
-        with conn.cursor() as cur:
-            cur.executemany(
-                "INSERT INTO md_dlq (event_id, event_type, topic, payload, attempts, last_error, failed_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (event_id) DO NOTHING",
-                [(n["event_id"], n["event_type"], n["topic"], Jsonb(n["payload"]), n["attempts"], n["last_error"], at)
-                 for n in notes])
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO md_dlq (event_id, event_type, topic, payload, attempts, last_error, failed_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (event_id) DO NOTHING",
+            [(n["event_id"], n["event_type"], n["topic"], Jsonb(n["payload"]), n["attempts"], n["last_error"], at)
+             for n in notes])
 
 
 def depth(conn=None) -> int:
