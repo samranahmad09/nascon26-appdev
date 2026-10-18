@@ -140,6 +140,11 @@ def match_detail(match_id: str, claims=Depends(current_claims)):
         names = _team_names(conn)
         meta = _meta(conn, [match_id]).get(match_id)
         pinned = store.pinned_product(conn, match_id) if store is not None and hasattr(store, "pinned_product") else None
+        streaming = optional_module("app.modules.streaming.service")
+        try:
+            playback = streaming.playback_url_for(conn, match_id) if streaming is not None else None
+        except Exception:
+            playback = None
     return {
         **proj,
         "home_name": names.get(proj["home"]["team_id"], proj["home"]["team_id"]),
@@ -150,6 +155,7 @@ def match_detail(match_id: str, claims=Depends(current_claims)):
         "scoring_model": sport.get("scoring_model"),
         "scoring_events": sport.get("scoring_events", {}),
         "pinned_product": pinned,
+        "playback_url": playback,
     }
 
 

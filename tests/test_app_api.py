@@ -85,3 +85,11 @@ def test_live_demo_match_has_pinned_product(fresh):
         pytest.skip("store not merged")
     detail = fresh.get("/api/v1/matches/demo-apl-r3-m1", headers=_token(fresh, "viewer@nascon.test")).json()
     assert detail["pinned_product"]["product_id"] == "prod-jersey-001"
+
+
+def test_match_detail_exposes_live_playback_url(fresh):
+    headers = _token(fresh, "viewer@nascon.test")
+    assert fresh.get("/api/v1/matches/match-m1", headers=headers).json()["playback_url"] is None
+    fresh.post("/audit/v1/stream/key", json={"action": "generate", "player_id": "player-alpha-1"})
+    detail = fresh.get("/api/v1/matches/match-m1", headers=headers).json()
+    assert "playback_url" in detail
