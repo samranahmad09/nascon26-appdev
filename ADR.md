@@ -1,69 +1,118 @@
 # Architecture Decision Records
 
-Eight short records of the decisions behind the platform, in the order they were made.
+Eight short records of the decisions behind the platform, covering Phase I (league and club operations) and
+Phase II (streaming, guest access, moderation and the QA harness).
 
 ---
 
 ## ADR-1: Modular monolith in FastAPI, one package per domain area
 
-**Context.** Phase I has six graded backend areas, a hard 4-hour build window, and a grader with 4 vCPU / 8 GB RAM that must build and start the stack in under 10 minutes.
+**Context.** Two hard build windows (4 h and 3.75 h), eleven graded backend areas across both phases, and a grader
+with 4 vCPU / 8 GB RAM that must build and start the whole stack in minutes.
 
-**Decision.** One Python 3.12 FastAPI service (`api`) with a package per area under `app/modules/` (sports, fixtures, scoring, standings, store, rbac, roster, offline, app_api) and shared plumbing in `app/core/` (validation, error format, signing, JWT, DB pool, rate limiting, reset registry). Modules talk through small `service.py` functions, never through each other's tables.
+**Decision.** One Python 3.12 FastAPI service (`api`) with a package per area under `app/modules/`: Phase I
+(sports, fixtures, scoring, standings, store, rbac, roster, offline, app_api) and Phase II (streaming, costream,
+qr_guest, moderation, observability, web, social). Shared plumbing lives in `app/core/` (validation, error
+envelope, signing, JWT, DB pool, middleware, metrics registry, reset registry). Modules talk through small
+`service.py` contracts, never through each other's tables.
 
-**Consequences.** One image, fast build, one place for cross-cutting rules (error body, validation order, 413, rate limit). Areas could be developed in parallel because each owns a folder. Scaling out would need the in-process pieces (ADR-3, ADR-7) moved to Postgres/Redis first.
+**Consequences.** One image and one place for cross-cutting rules (error body, validation order, 413, rate limit,
+guest boundary). Areas were built in parallel because each owns a folder. Scaling out would need the in-process
+pieces (ADR-3, ADR-7) moved to Postgres/Redis first.
 
 ## ADR-2: PostgreSQL is the source of truth; scoring is event-sourced
 
-**Context.** Scores must be rebuilt from an append-only stream, corrected only by compensating events, and standings must be recomputed from scratch after any correction.
+**Context.** Scores must be rebuilt from an append-only stream, corrected only by compensating events, and every
+derived view (standings, QR targets, guest overlays) must reflect the live match state.
 
-**Decision.** Match events live in an append-only table (no UPDATE/DELETE). The score projection and the standings table are pure functions over the log, computed on every read. Idempotency is keyed on client ids (event_id, order_id, request_id, action_id) stored with the original response.
+**Decision.** Match events live in an append-only table (no UPDATE/DELETE). Projections, standings and the QR
+`target_route` are computed from the log. Status transitions (start, end, postpone, cancel, abandon) are events
+too, so a printed QR poster automatically retargets when a match is completed or postponed. Idempotency is keyed
+on client ids (event_id, order_id, request_id, action_id, guest_token, session_id) stored with the original
+response.
 
-**Consequences.** History is never lost and every correction is auditable (the original row and its compensation both stay visible). Reads cost more than cached counters, which is fine at league scale and keeps the projection provably consistent with the log.
+**Consequences.** History is never lost and every correction is auditable. Hot read paths cache derived values and
+invalidate them when the log for that match grows (ADR-3).
 
-## ADR-3: Concurrency model: single writer lock for domain logs, atomic SQL for inventory
+## ADR-3: Concurrency and throughput on a single worker
 
-**Context.** Event sequence numbers, idempotent replays and roster rule checks must never race; checkout must survive 20 simultaneous buyers of the last unit.
+**Context.** Event sequence numbers, roster rules and idempotent replays must never race; checkout must survive 20
+simultaneous buyers; and the Phase II load profile (500 viewers + 50 chat posters) needs p95 < 800 ms.
 
-**Decision.** The API runs one uvicorn worker. Mutations of event logs, leagues, rosters and offline sync run under one process-wide re-entrant lock inside a DB transaction. Checkout does not use that lock: it claims the order id with `INSERT ... ON CONFLICT` and reserves stock with a conditional `UPDATE ... WHERE stock >= qty` in one transaction, so correctness comes from Postgres row locks.
+**Decision.** One uvicorn worker. Domain-log mutations run under a process-wide lock inside a DB transaction;
+checkout reserves stock with a conditional `UPDATE ... WHERE stock >= qty`; moderation and DLQ counters use atomic
+upserts. Cross-cutting guards are pure ASGI middleware (not `BaseHTTPMiddleware`), and the QR resolution path is an
+async route serving pre-serialised bytes from an in-memory cache that is invalidated whenever that match's event log changes.
 
-**Consequences.** Zero overselling and no negative stock regardless of worker count; the domain lock is simple and correct for one worker but is the first thing to replace (advisory locks) before running several API replicas.
+**Consequences.** Measured with `tests/k6_load.js`: 3,597 req/s, p95 195 ms, 0% errors (the BaseHTTPMiddleware
+version managed 662 req/s and p95 1.87 s). Running several workers would need the lock, the rate limiter and the
+WebSocket hub moved to Postgres advisory locks and Redis first.
 
 ## ADR-4: Sports are data, never code
 
-**Context.** A "mystery sport" posted during grading must work with no code change, and any branch on a sport or event name costs 8 points.
+**Context.** A "mystery sport" posted during grading must work with no code change, and any branch on a sport or
+event name costs points.
 
-**Decision.** Each sport is a validated JSON config (scoring model event / innings / round, periods, scoring events with points / runs+legal_ball+wicket / rounds, draw policy, overtime, tie-break order, roster rules). Engines branch only on `scoring_model` and on config values. Seeded sports, tenants, clubs and demo fixtures are JSON files (`seed_sports.json`, `seed_data.json`, `demo.json`).
+**Decision.** Each sport is a validated JSON config (scoring model event / innings / round, periods, scoring
+events, draw and overtime policy, tie-break order, roster rules). Engines branch only on `scoring_model` and on
+config values. Seed data (sports, tenants, clubs, demo fixtures, the Phase II `match-m1`) lives in JSON files.
 
-**Consequences.** New sports are a POST away; limits such as innings completion or a decided best-of series come from the config. The cost is validation code for every field of the rule schema.
+**Consequences.** New sports are a POST away; nothing in Python names a sport or an event type.
 
-## ADR-5: Signed records with canonical JSON and a per-team salt from the environment
+## ADR-5: Signed records with canonical JSON and per-phase salts from the environment
 
-**Context.** Every score event and receipt must carry `HMAC_SHA256(DAY1_SALT, id + "|" + payload)` that the grader recomputes byte for byte.
+**Context.** Phase I events and receipts are signed with DAY1_SALT; Phase II stream keys, co-stream states, QR
+links, cart merges and moderation records are signed with DAY2_SALT. The grader recomputes every signature.
 
-**Decision.** One signing helper (`app/core/signing.py`) with canonical JSON (recursively sorted keys, no whitespace, UTF-8, non-ASCII unescaped). The salt is read only from the `DAY1_SALT` environment variable, forwarded by compose; it is never committed (`.env` is git- and docker-ignored). Verified against Appendix A test vector 1 in the test suite.
+**Decision.** One signing module (`app/core/signing.py`) with canonical JSON (sorted keys, no whitespace, UTF-8,
+non-ASCII unescaped) and two entry points: `sign(id, payload)` (DAY1_SALT) and `sign_day2(entity_id, sig_payload)`
+(DAY2_SALT, `entity_id + "|" + canonical`). Each Phase II route builds exactly the `sig_payload` object from the
+spec's table. Both salts are read only from the environment (forwarded by compose; `.env` is git- and
+docker-ignored). Both Appendix A references are in the test suite.
 
-**Consequences.** Tampering with a stored event or receipt is detectable; rotating the salt only needs a restart.
+**Consequences.** Tampering with any stored record is detectable; rotating a salt only needs a restart.
 
-## ADR-6: Custom JWT plus a policy matrix for five roles and strict tenant isolation
+## ADR-6: Custom JWT, a policy matrix, and a server-side guest boundary
 
-**Context.** Five roles (super admin, league organizer, club manager, player, viewer) with ownership scopes, absolute tenant isolation, and probes that check 401 vs 403 vs 404 semantics.
+**Context.** Five member roles with ownership scopes and absolute tenant isolation (Phase I), plus anonymous guests
+who may watch, read scores and stage a cart but never write (Phase II).
 
-**Decision.** HS256 JWTs issued by the API carry role, tenant and scope ids (league_ids, club_id, player_id). Verification pins the algorithm, so `alg:none`, tampered and expired tokens are 401. Authorization is a declarative policy matrix (action x role -> rule) evaluated before anything else; cross-tenant access by a non-super-admin is always 403, and 404 is reserved for ids that do not exist at all.
+**Decision.** HS256 JWTs carry role, tenant and scope ids; verification pins the algorithm and rejects
+non-canonical segments, so `alg:none`, tampered and expired tokens are 401. Authorization is a declarative policy
+matrix evaluated before anything else. Guests get `guest_anon_tok_*` tokens; a pure ASGI `GuestWriteBlock` rejects
+every POST/PUT/PATCH/DELETE carrying one with 403 `GUEST_WRITE_FORBIDDEN` before validation, except the guest
+cart staging and merge routes. The cart-merge probe drives that same guard to prove the block.
 
-**Consequences.** Every role boundary is a row in a table with a negative test. Keycloak or Ory would add an extra container and startup time with no gain for the graded scope.
+**Consequences.** Hiding buttons in a UI is never the control; the server is. Guests convert to members through the
+progressive login modal, and the guest cart merges atomically and idempotently into the member cart.
 
-## ADR-7: Domain events on Redis Streams, realtime over WebSockets
+## ADR-7: Real-time, notifications, media and observability
 
-**Context.** Order status changes must emit structured domain events to an internal queue, and live scores and pinned products must reach connected clients instantly.
+**Context.** Live scores must reach clients in under 500 ms; co-stream chat needs one ordered room; failed
+notifications need retry and a dead-letter queue; streams need authenticated ingest that can be cut instantly; and
+operations need Prometheus metrics.
 
-**Decision.** Domain events are appended to a Redis Stream (`domain-events`) consumed by the `worker` service. Realtime fan-out is an in-process WebSocket hub (`/api/v1/ws?topic=match:{id}`) fed after each successful write. Event emission is best effort and never fails the user's request.
+**Decision.** An in-process WebSocket hub (`/ws/matches/{id}`, `/api/v1/ws?topic=`) fed after each committed write.
+Chat goes through synchronous moderation (leetspeak normalisation, flood and rate rules) with a per-room
+monotonically increasing sequence. Notifications retry up to 3 times with exponential backoff, then land in a
+Postgres-backed DLQ. MediaMTX authorises every publish/read through the API's `/internal/media/auth` hook (only
+active stream keys), and revoke/rotate kicks live publishers through the MediaMTX control API. `/metrics` renders
+a registry that modules feed (WebSocket connections, active streams, bitrate, DLQ depth, QR scans).
 
-**Consequences.** Redis is already in the approved stack and lighter than RabbitMQ on the 8 GB grader. The WebSocket hub is per process; multiple API replicas would publish through Redis pub/sub instead.
+**Consequences.** Redis Streams carry domain events to the worker; the WebSocket hub is per process (ADR-3). The
+media server is self-hosted, so no third-party streaming SaaS sees our streams.
 
-## ADR-8: Offline-first Flutter app with a persistent action queue and server-wins sync
+## ADR-8: Offline-first native app, deep links, and a zero-install guest web player
 
-**Context.** The app must keep working in airplane mode, queue scoring and roster actions, survive a force-close, and sync with conflict reporting.
+**Context.** The app must work in airplane mode with a persistent action queue (Phase I), open straight onto the
+right screen from `nascon://` links and QR codes (Phase II), and guests on any phone must watch without installing
+anything.
 
-**Decision.** Flutter (Android). Fixtures, standings, club profiles and match details are cached in a local database; offline actions are stored in a persistent queue in exactly the `/audit/v1/offline-sync` action format with a stable device id and the last-seen version as `base_version`. The server replays actions in `queued_at` order with the same domain services as the online routes and reports per action: applied (appended or rebased_append), duplicate, or rejected with server_wins and the rule's error code. The token is stored in the Android Keystore (flutter_secure_storage). The server address is editable in Settings.
+**Decision.** Flutter (Android) with a local cache and a persistent queue in the exact `/audit/v1/offline-sync`
+format; Keystore token storage; a browsable `nascon://` intent-filter routed to Match Live / Co-Stream screens that
+open in read-only guest mode without a login wall; an ML Kit QR scanner. The guest web player is server-rendered
+HTML plus vanilla JS under `/web/*` (hls.js vendored locally), carrying the nine required `data-testid`s and WCAG
+2.1 AA rules, verified by Selenium Grid 4 (`tests/selenium`), Appium 2 (`tests/appium`) and k6 (`tests/k6_load.js`).
 
-**Consequences.** No divergent offline business logic: the server stays authoritative and the app explains every rejection in plain language. Stale-but-valid actions are rebased instead of rejected, which keeps scorers productive during connectivity gaps.
+**Consequences.** One backend serves three surfaces (native app, guest web, graders) through the same domain
+services, so the offline replays, guest reads and audit probes can never diverge.

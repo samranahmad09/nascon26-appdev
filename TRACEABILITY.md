@@ -35,9 +35,9 @@ so the suite runs several hundred cases.
 
 | ID | Requirement | Source | Automated tests |
 |---|---|---|---|
-| FR-3.1 | Athlete identity, follow graph, VOD index | `app/modules/web/` (player pages), `app/modules/streaming/service.py` (recordings index) | `tests/test_web.py`, `tests/test_streaming.py` |
+| FR-3.1 | Public athlete profile (career record from the event logs, club, upcoming fixtures, VOD archive of completed matches) and a concurrency-safe, idempotent follow graph | `app/modules/social/routes.py`, `app/modules/web/` (player pages) | `tests/test_social.py`, `tests/test_web.py` |
 | FR-3.2 | Stream key lifecycle (generate / rotate / revoke, DAY2_SALT signed), RTMP/WHIP ingest authorised by the API, revoke severs ingest, HLS/WebRTC playback, live overlays | `app/modules/streaming/{routes,service,media}.py`, `media/mediamtx.yml`, `app/core/signing.py` (`sign_day2`) | `tests/test_streaming.py`, `tests/test_day2_core.py` |
-| FR-3.3 | 4-way co-stream sessions, layouts, deterministic host-drop handoff, unified chat room `chat-{session_id}` | `app/modules/costream/{routes,service}.py`, `media/costream.sh` | `tests/test_costream.py`, `tests/appium/test_cross_surface_chat.py` |
+| FR-3.3 | 4-way co-stream sessions, layouts, deterministic host-drop handoff, unified chat room `chat-{session_id}` | `app/modules/costream/{routes,service}.py`, `media/costream.sh` (composite) | `tests/test_costream.py`, `tests/appium/test_cross_surface_chat.py` |
 | FR-4.1 | Dynamic QR deep links: stable short URLs, live target routes, 302 redirect, SVG/PNG/PDF export, privacy-safe scan telemetry, `nascon://` deep links | `app/modules/qr_guest/{routes,service,exports}.py`, `mobile/android/app/src/main/AndroidManifest.xml` | `tests/test_qr_guest.py`, `tests/selenium/test_guest_grid.py` (test 1), `tests/appium/test_mobile_deeplink.py` |
 | FR-4.2 | Zero-account guest web player (`/web/*`), anonymous guest tokens | `app/modules/web/`, `app/modules/qr_guest/service.py` | `tests/test_web.py`, `tests/selenium/test_guest_grid.py` |
 | FR-4.3 | Server-enforced read-only boundary: guest writes get 403 `GUEST_WRITE_FORBIDDEN` | `app/core/middleware.py` (`GuestWriteBlock`), `app/modules/qr_guest/service.py` | `tests/test_day2_core.py`, `tests/test_qr_guest.py`, `tests/selenium/test_guest_grid.py` (test 2) |
