@@ -148,6 +148,14 @@ def test_rate_window_slides():
     assert w.hit(("k",), "m9", 10.0) is False
 
 
+def test_rate_window_sweeps_stale_senders():
+    w = service.RateWindow(limit=3, window_s=2.0, sweep_every=3)
+    w.hit(("old",), "a", 0.0)
+    w.hit(("fresh",), "b", 9.5)
+    w.hit(("fresh",), "c", 10.0)
+    assert set(w._hits) == {("fresh",)}
+
+
 def test_simulated_failures_go_to_dlq_after_three_attempts(fresh, monkeypatch):
     calls = []
     real = bus._attempt

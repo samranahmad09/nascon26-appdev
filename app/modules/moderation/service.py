@@ -55,15 +55,22 @@ TABLES = ["md_room_actions", "md_audit", "md_chat_rooms", "md_chat_messages"]
 class RateWindow:
     """Sliding window of distinct message ids per key; thread-safe, in memory (one API worker)."""
 
-    def __init__(self, limit: int = RATE_MAX, window_s: float = RATE_WINDOW_S):
+    def __init__(self, limit: int = RATE_MAX, window_s: float = RATE_WINDOW_S, sweep_every: int = 1000):
         self.limit = limit
         self.window_s = window_s
+        self.sweep_every = sweep_every
         self._hits: dict[tuple, OrderedDict] = {}
+        self._calls = 0
         self._lock = threading.Lock()
 
     def hit(self, key: tuple, message_id: str, now: float) -> bool:
         """Records message_id under key; True when key now has more than `limit` ids inside the window."""
         with self._lock:
+            self._calls += 1
+            if self._calls % self.sweep_every == 0:
+                # drop senders whose newest message left the window, so one-off senders do not pile up
+                for stale in [k for k, v in self._hits.items() if next(reversed(v.values())) <= now - self.window_s]:
+                    del self._hits[stale]
             ids = self._hits.setdefault(key, OrderedDict())
             while ids and next(iter(ids.values())) <= now - self.window_s:
                 ids.popitem(last=False)
