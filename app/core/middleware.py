@@ -46,3 +46,31 @@ class RateLimit(BaseHTTPMiddleware):
                 return error_response(429, "RATE_LIMITED", "Too many requests. Try again shortly.",
                                       {"retry_after_seconds": retry}, headers={"Retry-After": str(retry)})
         return await call_next(request)
+
+
+GUEST_TOKEN_PREFIX = "guest_"
+WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+# Guests may stage a cart and hand it over for merging; every other write is refused server-side.
+GUEST_WRITE_ALLOWED = ("/api/v1/guest/", "/audit/v1/guest/", "/web/api/guest/")
+
+
+def guest_token_of(request) -> str | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    token = token.strip()
+    if scheme.lower() == "bearer" and token.startswith(GUEST_TOKEN_PREFIX):
+        return token
+    return None
+
+
+class GuestWriteBlock(BaseHTTPMiddleware):
+    """FR-4.3: any write carrying an anonymous guest token gets 403 GUEST_WRITE_FORBIDDEN before
+    any other processing (so the probe gets 403 whatever body it sends)."""
+
+    async def dispatch(self, request, call_next):
+        if request.method in WRITE_METHODS and not request.url.path.startswith(GUEST_WRITE_ALLOWED):
+            token = guest_token_of(request)
+            if token is not None:
+                return error_response(403, "GUEST_WRITE_FORBIDDEN",
+                                      "Anonymous guest tokens cannot perform write mutations.",
+                                      {"guest_token": token})
+        return await call_next(request)

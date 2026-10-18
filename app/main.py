@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from .core import db, errors, realtime
 from .core import routes as core_routes
 from .core import seed as _core_seed  # noqa: F401  (registers core tables)
-from .core.middleware import BodySizeLimit, RateLimit
+from .core.middleware import BodySizeLimit, GuestWriteBlock, RateLimit
 from .modules import MODULES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -31,6 +31,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="NaSCon 26 League Platform", lifespan=lifespan)
 errors.install(app)
 app.add_middleware(RateLimit)
+app.add_middleware(GuestWriteBlock)
 app.add_middleware(BodySizeLimit)
 app.include_router(core_routes.router)
 for module in MODULES:

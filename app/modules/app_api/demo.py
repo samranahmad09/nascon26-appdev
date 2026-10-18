@@ -9,7 +9,9 @@ from ...core.registry import register
 from ..sports import get_sport
 
 log = logging.getLogger("demo")
-DEMO = json.loads(Path(__file__).with_name("demo.json").read_text(encoding="utf-8"))["league"]
+_DATA = json.loads(Path(__file__).with_name("demo.json").read_text(encoding="utf-8"))
+DEMO = _DATA["league"]
+DAY2_MATCH = _DATA["day2_match"]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_fixture_meta (
@@ -116,3 +118,29 @@ def seed_demo(conn, opts: dict) -> None:
 
 
 register(SCHEMA, ["app_fixture_meta"], seed_demo, order=900)
+
+
+def seed_day2_match(conn, opts: dict) -> None:
+    """Phase II baseline: match-m1 (league-alpha-1, club-alpha-1 v club-alpha-2) in progress at 1 - 0."""
+    scoring = optional_module("app.modules.scoring.service")
+    league_row = conn.execute("SELECT * FROM tenant_leagues WHERE league_id = %s", (DAY2_MATCH["league_id"],)).fetchone()
+    sport = get_sport(conn, league_row["sport_id"]) if league_row else None
+    if scoring is None or sport is None:
+        return
+    m = DAY2_MATCH
+    events = [("match_init", {"sport_id": sport["sport_id"], "home_team_id": m["home"], "away_team_id": m["away"],
+                              "league_id": m["league_id"]}),
+              ("match_start", {})]
+    unit = unit_event(sport)
+    for team, count in ((m["home"], m["score"][0]), (m["away"], m["score"][1])):
+        events += [("score", {"team_id": team, "event_type": unit})] * count
+    try:
+        with conn.transaction():
+            for i, (event_type, payload) in enumerate(events, start=1):
+                scoring.append_event(conn, {"event_id": f"seed-{m['match_id']}-{i:03d}", "match_id": m["match_id"],
+                                            "type": event_type, "payload": payload})
+    except Exception:
+        log.exception("day 2 match not seeded")
+
+
+register("", [], seed_day2_match, order=910)

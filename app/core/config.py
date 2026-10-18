@@ -1,6 +1,7 @@
 import os
 
 DAY1_SALT = os.environ.get("DAY1_SALT", "")
+DAY2_SALT = os.environ.get("DAY2_SALT", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://nascon:nascon@db:5432/nascon")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 JWT_SECRET = os.environ.get("JWT_SECRET", "nascon26-local-jwt-secret-change-me")

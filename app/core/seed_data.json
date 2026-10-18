@@ -1,47 +1,282 @@
 {
   "tenants": [
-    {"tenant_id": "tenant-alpha", "name": "Alpha Sports",
-     "branding": {"logo_url": "/api/v1/tenants/tenant-alpha/logo.png", "primary_color": "#0B5FFF", "secondary_color": "#FFB800"}},
-    {"tenant_id": "tenant-beta", "name": "Beta Athletics",
-     "branding": {"logo_url": "/api/v1/tenants/tenant-beta/logo.png", "primary_color": "#0E9F6E", "secondary_color": "#1F2937"}}
+    {
+      "tenant_id": "tenant-alpha",
+      "name": "Alpha Sports",
+      "branding": {
+        "logo_url": "/api/v1/tenants/tenant-alpha/logo.png",
+        "primary_color": "#0B5FFF",
+        "secondary_color": "#FFB800"
+      }
+    },
+    {
+      "tenant_id": "tenant-beta",
+      "name": "Beta Athletics",
+      "branding": {
+        "logo_url": "/api/v1/tenants/tenant-beta/logo.png",
+        "primary_color": "#0E9F6E",
+        "secondary_color": "#1F2937"
+      }
+    }
   ],
   "tenant_leagues": [
-    {"league_id": "league-alpha-1", "tenant_id": "tenant-alpha", "name": "Alpha Premier League", "sport_id": "football", "season": "2026", "organizer_user_id": "user-organizer"},
-    {"league_id": "league-alpha-2", "tenant_id": "tenant-alpha", "name": "Alpha Hoops League", "sport_id": "basketball", "season": "2026", "organizer_user_id": null},
-    {"league_id": "league-beta-1", "tenant_id": "tenant-beta", "name": "Beta Champions League", "sport_id": "football", "season": "2026", "organizer_user_id": null}
+    {
+      "league_id": "league-alpha-1",
+      "tenant_id": "tenant-alpha",
+      "name": "Alpha Premier League",
+      "sport_id": "football",
+      "season": "2026",
+      "organizer_user_id": "user-organizer"
+    },
+    {
+      "league_id": "league-alpha-2",
+      "tenant_id": "tenant-alpha",
+      "name": "Alpha Hoops League",
+      "sport_id": "basketball",
+      "season": "2026",
+      "organizer_user_id": null
+    },
+    {
+      "league_id": "league-beta-1",
+      "tenant_id": "tenant-beta",
+      "name": "Beta Champions League",
+      "sport_id": "football",
+      "season": "2026",
+      "organizer_user_id": null
+    }
   ],
   "clubs": [
-    {"club_id": "club-alpha-1", "tenant_id": "tenant-alpha", "league_id": "league-alpha-1", "name": "Alpha United",
-     "venue": "Alpha Arena", "lat": 33.6844, "lng": 73.0479, "coach": "Imran Qureshi"},
-    {"club_id": "club-alpha-2", "tenant_id": "tenant-alpha", "league_id": "league-alpha-1", "name": "Alpha Rovers",
-     "venue": "Rovers Ground", "lat": 33.7215, "lng": 73.0433, "coach": "Faisal Mir"},
-    {"club_id": "club-alpha-3", "tenant_id": "tenant-alpha", "league_id": "league-alpha-1", "name": "Alpha Falcons",
-     "venue": "Falcon Park", "lat": 33.6518, "lng": 73.0832, "coach": "Nadia Hussain"},
-    {"club_id": "club-alpha-4", "tenant_id": "tenant-alpha", "league_id": "league-alpha-1", "name": "Alpha Strikers",
-     "venue": "Strikers Stadium", "lat": 33.6007, "lng": 73.0679, "coach": "Shoaib Akhtar Khan"},
-    {"club_id": "club-beta-1", "tenant_id": "tenant-beta", "league_id": "league-beta-1", "name": "Beta City",
-     "venue": "Beta Stadium", "lat": 31.5204, "lng": 74.3587, "coach": "Kamran Ali"}
+    {
+      "club_id": "club-alpha-1",
+      "tenant_id": "tenant-alpha",
+      "league_id": "league-alpha-1",
+      "name": "Alpha United",
+      "venue": "Alpha Arena",
+      "lat": 33.6844,
+      "lng": 73.0479,
+      "coach": "Imran Qureshi"
+    },
+    {
+      "club_id": "club-alpha-2",
+      "tenant_id": "tenant-alpha",
+      "league_id": "league-alpha-1",
+      "name": "Alpha Rovers",
+      "venue": "Rovers Ground",
+      "lat": 33.7215,
+      "lng": 73.0433,
+      "coach": "Faisal Mir"
+    },
+    {
+      "club_id": "club-alpha-3",
+      "tenant_id": "tenant-alpha",
+      "league_id": "league-alpha-1",
+      "name": "Alpha Falcons",
+      "venue": "Falcon Park",
+      "lat": 33.6518,
+      "lng": 73.0832,
+      "coach": "Nadia Hussain"
+    },
+    {
+      "club_id": "club-alpha-4",
+      "tenant_id": "tenant-alpha",
+      "league_id": "league-alpha-1",
+      "name": "Alpha Strikers",
+      "venue": "Strikers Stadium",
+      "lat": 33.6007,
+      "lng": 73.0679,
+      "coach": "Shoaib Akhtar Khan"
+    },
+    {
+      "club_id": "club-beta-1",
+      "tenant_id": "tenant-beta",
+      "league_id": "league-beta-1",
+      "name": "Beta City",
+      "venue": "Beta Stadium",
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "coach": "Kamran Ali"
+    }
   ],
   "players": [
-    {"player_id": "player-alpha-1", "tenant_id": "tenant-alpha", "club_id": "club-alpha-1", "name": "Ahmed Raza", "position": "fw", "role": "captain", "shirt_number": 9},
-    {"player_id": "player-alpha-1b", "tenant_id": "tenant-alpha", "club_id": "club-alpha-1", "name": "Bilal Khan", "position": "gk", "role": "starter", "shirt_number": 1},
-    {"player_id": "player-alpha-1c", "tenant_id": "tenant-alpha", "club_id": "club-alpha-1", "name": "Usman Tariq", "position": "df", "role": "vice_captain", "shirt_number": 4},
-    {"player_id": "player-alpha-1d", "tenant_id": "tenant-alpha", "club_id": "club-alpha-1", "name": "Hamza Ali", "position": "mf", "role": "substitute", "shirt_number": 8},
-    {"player_id": "player-alpha-1e", "tenant_id": "tenant-alpha", "club_id": "club-alpha-1", "name": "Saad Ahmed", "position": "df", "role": "starter", "shirt_number": 5},
-    {"player_id": "player-alpha-2", "tenant_id": "tenant-alpha", "club_id": "club-alpha-2", "name": "Zain Malik", "position": "mf", "role": "captain", "shirt_number": 10},
-    {"player_id": "player-alpha-2b", "tenant_id": "tenant-alpha", "club_id": "club-alpha-2", "name": "Ali Haider", "position": "gk", "role": "starter", "shirt_number": 1},
-    {"player_id": "player-alpha-2c", "tenant_id": "tenant-alpha", "club_id": "club-alpha-2", "name": "Fahad Mustafa", "position": "fw", "role": "starter", "shirt_number": 11},
-    {"player_id": "player-alpha-3", "tenant_id": "tenant-alpha", "club_id": "club-alpha-3", "name": "Omer Farooq", "position": "fw", "role": "captain", "shirt_number": 7},
-    {"player_id": "player-alpha-3b", "tenant_id": "tenant-alpha", "club_id": "club-alpha-3", "name": "Waqas Butt", "position": "gk", "role": "starter", "shirt_number": 1},
-    {"player_id": "player-alpha-4", "tenant_id": "tenant-alpha", "club_id": "club-alpha-4", "name": "Junaid Iqbal", "position": "mf", "role": "captain", "shirt_number": 6},
-    {"player_id": "player-alpha-4b", "tenant_id": "tenant-alpha", "club_id": "club-alpha-4", "name": "Rehan Siddiqui", "position": "gk", "role": "starter", "shirt_number": 1},
-    {"player_id": "player-beta-1", "tenant_id": "tenant-beta", "club_id": "club-beta-1", "name": "Danish Javed", "position": "fw", "role": "captain", "shirt_number": 7}
+    {
+      "player_id": "player-alpha-1",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-1",
+      "name": "Ahmed Raza",
+      "position": "fw",
+      "role": "captain",
+      "shirt_number": 9
+    },
+    {
+      "player_id": "player-alpha-1b",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-1",
+      "name": "Bilal Khan",
+      "position": "gk",
+      "role": "starter",
+      "shirt_number": 1
+    },
+    {
+      "player_id": "player-alpha-1c",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-1",
+      "name": "Usman Tariq",
+      "position": "df",
+      "role": "vice_captain",
+      "shirt_number": 4
+    },
+    {
+      "player_id": "player-alpha-1d",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-1",
+      "name": "Hamza Ali",
+      "position": "mf",
+      "role": "substitute",
+      "shirt_number": 8
+    },
+    {
+      "player_id": "player-alpha-1e",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-1",
+      "name": "Saad Ahmed",
+      "position": "df",
+      "role": "starter",
+      "shirt_number": 5
+    },
+    {
+      "player_id": "player-alpha-2",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-2",
+      "name": "Zain Malik",
+      "position": "mf",
+      "role": "captain",
+      "shirt_number": 10
+    },
+    {
+      "player_id": "player-alpha-2b",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-2",
+      "name": "Ali Haider",
+      "position": "gk",
+      "role": "starter",
+      "shirt_number": 1
+    },
+    {
+      "player_id": "player-alpha-2c",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-2",
+      "name": "Fahad Mustafa",
+      "position": "fw",
+      "role": "starter",
+      "shirt_number": 11
+    },
+    {
+      "player_id": "player-alpha-3",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-3",
+      "name": "Omer Farooq",
+      "position": "fw",
+      "role": "captain",
+      "shirt_number": 7
+    },
+    {
+      "player_id": "player-alpha-3b",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-3",
+      "name": "Waqas Butt",
+      "position": "gk",
+      "role": "starter",
+      "shirt_number": 1
+    },
+    {
+      "player_id": "player-alpha-4",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-4",
+      "name": "Junaid Iqbal",
+      "position": "mf",
+      "role": "captain",
+      "shirt_number": 6
+    },
+    {
+      "player_id": "player-alpha-4b",
+      "tenant_id": "tenant-alpha",
+      "club_id": "club-alpha-4",
+      "name": "Rehan Siddiqui",
+      "position": "gk",
+      "role": "starter",
+      "shirt_number": 1
+    },
+    {
+      "player_id": "player-beta-1",
+      "tenant_id": "tenant-beta",
+      "club_id": "club-beta-1",
+      "name": "Danish Javed",
+      "position": "fw",
+      "role": "captain",
+      "shirt_number": 7
+    },
+    {
+      "player_id": "player-beta-2",
+      "tenant_id": "tenant-beta",
+      "club_id": "club-beta-1",
+      "name": "Faraz Ahmed",
+      "position": "mf",
+      "role": "starter",
+      "shirt_number": 8
+    }
   ],
   "users": [
-    {"user_id": "user-admin", "email": "admin@nascon.test", "display_name": "Platform Admin", "role": "super_admin", "tenant_id": null, "league_ids": [], "club_id": null, "player_id": null},
-    {"user_id": "user-organizer", "email": "organizer@nascon.test", "display_name": "League Organizer", "role": "league_organizer", "tenant_id": "tenant-alpha", "league_ids": ["league-alpha-1"], "club_id": null, "player_id": null},
-    {"user_id": "user-manager", "email": "manager@nascon.test", "display_name": "Club Manager", "role": "club_manager", "tenant_id": "tenant-alpha", "league_ids": [], "club_id": "club-alpha-1", "player_id": null},
-    {"user_id": "user-player", "email": "player@nascon.test", "display_name": "Ahmed Raza", "role": "player", "tenant_id": "tenant-alpha", "league_ids": [], "club_id": "club-alpha-1", "player_id": "player-alpha-1"},
-    {"user_id": "user-viewer", "email": "viewer@nascon.test", "display_name": "General Viewer", "role": "viewer", "tenant_id": "tenant-alpha", "league_ids": [], "club_id": null, "player_id": null}
+    {
+      "user_id": "user-admin",
+      "email": "admin@nascon.test",
+      "display_name": "Platform Admin",
+      "role": "super_admin",
+      "tenant_id": null,
+      "league_ids": [],
+      "club_id": null,
+      "player_id": null
+    },
+    {
+      "user_id": "user-organizer",
+      "email": "organizer@nascon.test",
+      "display_name": "League Organizer",
+      "role": "league_organizer",
+      "tenant_id": "tenant-alpha",
+      "league_ids": [
+        "league-alpha-1"
+      ],
+      "club_id": null,
+      "player_id": null
+    },
+    {
+      "user_id": "user-manager",
+      "email": "manager@nascon.test",
+      "display_name": "Club Manager",
+      "role": "club_manager",
+      "tenant_id": "tenant-alpha",
+      "league_ids": [],
+      "club_id": "club-alpha-1",
+      "player_id": null
+    },
+    {
+      "user_id": "user-player",
+      "email": "player@nascon.test",
+      "display_name": "Ahmed Raza",
+      "role": "player",
+      "tenant_id": "tenant-alpha",
+      "league_ids": [],
+      "club_id": "club-alpha-1",
+      "player_id": "player-alpha-1"
+    },
+    {
+      "user_id": "user-viewer",
+      "email": "viewer@nascon.test",
+      "display_name": "General Viewer",
+      "role": "viewer",
+      "tenant_id": "tenant-alpha",
+      "league_ids": [],
+      "club_id": null,
+      "player_id": null
+    }
   ]
 }

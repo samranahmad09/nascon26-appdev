@@ -245,3 +245,17 @@ async def live(ws: WebSocket, topic: str = "*"):
         pass
     finally:
         realtime.unsubscribe(ws)
+
+
+@router.websocket("/ws/matches/{match_id}")
+async def live_match(ws: WebSocket, match_id: str):
+    """NFR-1: every accepted score event on this match is pushed here (topic match:{id})."""
+    await ws.accept()
+    realtime.subscribe(f"match:{match_id}", ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        realtime.unsubscribe(ws)

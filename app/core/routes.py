@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
-from . import db, locks, registry
+from . import db, locks, metrics, registry
 from .config import DEFAULT_SEED
 from .db import Jsonb
 from .errors import error_response, not_found
@@ -63,3 +63,8 @@ def reset(body=Depends(json_body)):
             raise not_found("VARIANT_NOT_FOUND", f"Variant {variant_id} does not exist.", {"variant_id": variant_id})
     result = reset_state(DEFAULT_SEED if seed is None else seed, stock)
     return JSONResponse(status_code=200, content=result)
+
+
+@router.get("/metrics")
+def prometheus_metrics():
+    return Response(content=metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8")

@@ -1,3 +1,23 @@
+x-selenium-node: &selenium-node
+  shm_size: "1gb"
+  depends_on:
+    selenium-hub:
+      condition: service_started
+  environment: &selenium-node-env
+    SE_EVENT_BUS_HOST: selenium-hub
+    SE_EVENT_BUS_PUBLISH_PORT: "4442"
+    SE_EVENT_BUS_SUBSCRIBE_PORT: "4443"
+    SE_NODE_MAX_SESSIONS: "2"
+    SE_START_VNC: "false"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  healthcheck:
+    test: ["CMD-SHELL", "curl -sf http://localhost:5555/status || exit 1"]
+    interval: 5s
+    timeout: 3s
+    retries: 30
+  restart: unless-stopped
+
 services:
   db:
     image: postgres:16-alpine
@@ -16,33 +36,57 @@ services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   minio:
     image: bitnamilegacy/minio:2024.9.22
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-nascon-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-nascon-minio-secret}
-      MINIO_DEFAULT_BUCKETS: receipts
+      MINIO_DEFAULT_BUCKETS: receipts,recordings
     volumes:
       - miniodata:/bitnami/minio/data
+
+  media:
+    image: bluenviron/mediamtx:1.9.1
+    ports:
+      - "1935:1935"
+      - "8888:8888"
+      - "8889:8889"
+      - "8189:8189/udp"
+    restart: unless-stopped
 
   api:
     build: .
     environment:
       DAY1_SALT: ${DAY1_SALT}
+      DAY2_SALT: ${DAY2_SALT}
       DATABASE_URL: postgresql://nascon:nascon@db:5432/nascon
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-nascon26-local-jwt-secret-change-me}
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-nascon-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-nascon-minio-secret}
+      MEDIA_HOST: media
     ports:
       - "8080:8080"
+    networks:
+      default:
+        aliases: [backend]
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health', timeout=3).status == 200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped
 
   worker:
@@ -54,6 +98,31 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+
+  selenium-hub:
+    image: selenium/hub:4.24.0
+    ports:
+      - "4442:4442"
+      - "4443:4443"
+      - "4444:4444"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4444/status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  node-chrome-1:
+    <<: *selenium-node
+    image: selenium/node-chrome:4.24.0
+
+  node-chrome-2:
+    <<: *selenium-node
+    image: selenium/node-chrome:4.24.0
+
+  node-firefox:
+    <<: *selenium-node
+    image: selenium/node-firefox:4.24.0
 
 volumes:
   pgdata:

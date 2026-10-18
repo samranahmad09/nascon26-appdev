@@ -89,5 +89,15 @@
         "gk": 1
       }
     }
+  },
+  "day2_match": {
+    "match_id": "match-m1",
+    "league_id": "league-alpha-1",
+    "home": "club-alpha-1",
+    "away": "club-alpha-2",
+    "score": [
+      1,
+      0
+    ]
   }
 }

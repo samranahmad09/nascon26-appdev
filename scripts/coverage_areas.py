@@ -12,10 +12,19 @@ AREAS = {
 }
 
 
-def main(path: str) -> None:
+DAY2_AREAS = {
+    "streaming": ["app/modules/streaming/"],
+    "costream": ["app/modules/costream/"],
+    "qr_guest": ["app/modules/qr_guest/"],
+    "moderation_dlq": ["app/modules/moderation/"],
+    "observability": ["app/modules/observability/", "app/core/metrics.py"],
+}
+
+
+def main(path: str, areas: dict = AREAS) -> None:
     files = json.load(open(path))["files"]
     result = {}
-    for area, prefixes in AREAS.items():
+    for area, prefixes in areas.items():
         stmts = covered = 0
         for name, data in files.items():
             if any(name.replace("\\", "/").startswith(p) for p in prefixes):
@@ -26,4 +35,7 @@ def main(path: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "cov.json")
+    path = sys.argv[1] if len(sys.argv) > 1 else "cov.json"
+    main(path)
+    print("COVERAGE_DAY2.json figures:")
+    main(path, DAY2_AREAS)

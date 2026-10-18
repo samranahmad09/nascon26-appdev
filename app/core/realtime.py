@@ -14,6 +14,10 @@ def subscribe(topic: str, ws) -> None:
     _subs.setdefault(topic, set()).add(ws)
 
 
+def active_connections() -> int:
+    return len({id(ws) for subs in _subs.values() for ws in subs})
+
+
 def unsubscribe(ws) -> None:
     for subs in _subs.values():
         subs.discard(ws)
