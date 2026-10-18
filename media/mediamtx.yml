@@ -1,9 +1,11 @@
-# NaSCon '26: MediaMTX 1.9.1 default configuration with three changes:
+# NaSCon '26: MediaMTX 1.9.1 default configuration with two changes:
 #   authMethod http -> the API's /internal/media/auth hook (only active stream keys may publish or play
-#     live/{stream_key}; revoked keys get 409 KEY_REVOKED; costream/{session_id} composites stay open)
+#     live/{stream_key}; revoked keys get 409 KEY_REVOKED; costream/{session_id} stays open until the
+#     session terminates)
 #   api yes (control API on :9997, reachable only inside the compose network) so the API can kick
 #     publishers within 2 s of a revoke or rotate and read stream stats for /metrics
-#   costream/{session_id} paths publish a composite on demand (see the paths section)
+# media/costream.sh composes a session's live participants; it needs the bluenviron/mediamtx:1.9.1-ffmpeg
+# image plus a path entry:  "~^costream/(.+)$": {runOnDemand: sh /costream.sh $G1, runOnDemandRestart: yes}
 
 ###############################################
 # Global settings
@@ -706,14 +708,6 @@ paths:
   # example:
   # my_camera:
   #   source: rtsp://my_camera
-
-  # Co-stream composite (FR-3.3): reading costream/{session_id} starts /costream.sh, which asks the API
-  # for the session's live participants and publishes their grid (or a placeholder while none is live).
-  # MediaMTX stops it 10 s after the last reader leaves, so no FFmpeg process outlives its audience.
-  "~^costream/(.+)$":
-    runOnDemand: sh /costream.sh $G1
-    runOnDemandRestart: yes
-    runOnDemandStartTimeout: 15s
 
   # Settings under path "all_others" are applied to all paths that
   # do not match another entry.

@@ -53,11 +53,21 @@ services:
 
   media:
     image: bluenviron/mediamtx:1.9.1
+    # Publish/read authorised by the API (/internal/media/auth); control API on :9997 inside the network only.
+    volumes:
+      - ./media/mediamtx.yml:/mediamtx.yml:ro
     ports:
       - "1935:1935"
       - "8888:8888"
       - "8889:8889"
       - "8189:8189/udp"
+    healthcheck:
+      # The image is FROM scratch (no shell or HTTP client), so this is a liveness check of the binary;
+      # the API probes real readiness through the control API (streaming.service.media_ready()).
+      test: ["CMD", "/mediamtx", "--version"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     restart: unless-stopped
 
   api:
