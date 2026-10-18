@@ -19,7 +19,7 @@ log = logging.getLogger("costream.composite")
 
 PREFIX = "costream/"
 MAX_COMPOSITES = 8
-HEAL_INTERVAL_S = 10.0
+HEAL_INTERVAL_S = 3.0
 
 _running: "OrderedDict[str, float]" = OrderedDict()
 _healed: dict[str, float] = {}
