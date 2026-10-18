@@ -149,15 +149,17 @@ def run_probe(req: dict) -> dict:
         record_action(room, sender, action, reason)
 
     failed = req["simulate_failed_notifications"]
-    if failed > 0:
-        bus.deliver([bus.make_note(f"chat:{room}", "chat_notification",
-                                   {"chat_room_id": room, "notification": n + 1}, simulate_dlq=True)
-                     for n in range(failed)])
+    notes = bus.deliver([bus.make_note(f"chat:{room}", "chat_notification",
+                                       {"chat_room_id": room, "notification": n + 1}, simulate_dlq=True)
+                         for n in range(failed)], dead_letter_now=False)
 
     flagged_count = sum(1 for m in filtered if m["flagged"])
     if FLAGGED_COUNT_INCLUDES_DROPPED:
         flagged_count += dropped
-    with db.pool.connection() as conn:
+    with db.tx() as conn:
+        if notes:
+            # enqueue + read in one transaction under the DLQ lock: concurrent probes report k, 2k, .. 10k
+            bus.dead_letter(conn, [n for n in notes if not n["delivered"]])
         queue_depth = bus.depth(conn)
         events = bus.undelivered(conn) if req["check_dlq"] else []
         signature = sign_day2(room, {"chat_room_id": room, "flagged_count": flagged_count,
