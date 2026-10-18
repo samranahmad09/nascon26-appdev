@@ -174,8 +174,9 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           set +e
-          # Same salts as run_tests.sh: the unit tests pin signatures computed with them.
-          docker compose exec -T -e DAY1_SALT=test-salt -e DAY2_SALT=test-salt-2 api python -m pytest -q -p no:cacheprovider \
+          # Same environment as run_tests.sh: test salts (signatures are pinned) and no media host (the
+          # streaming tests stub the MediaMTX control API instead of driving the live media server).
+          docker compose exec -T -e DAY1_SALT=test-salt -e DAY2_SALT=test-salt-2 -e MEDIA_HOST= api python -m pytest -q -p no:cacheprovider \
             --ignore=tests/selenium --ignore=tests/appium --junitxml=/tmp/unit-report.xml
           rc=$?
           docker compose cp api:/tmp/unit-report.xml tests/reports/unit-report.xml
