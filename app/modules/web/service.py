@@ -100,27 +100,24 @@ def _active_keys(conn, player_ids):
     return optional("app.modules.streaming.service").active_keys(conn, player_ids)
 
 
-def playback_url(conn, entity_id: str, club_ids=()) -> str | None:
-    """HLS URL for a match: an entity-level stream if the streaming module offers one, else the live solo stream of
-    a player from either club (stream keys belong to players), else None and the page shows "stream starting"."""
+def playback_url(conn, entity_id: str, club_ids=(), fallback: str | None = None) -> str | None:
+    """Live HLS URL for an entity, or None (the page shows "stream starting"). The streaming module's
+    playback_url_for knows what is publishing right now, so its answer is final when it exists; without it, the
+    active solo key of a player from either club (stream keys belong to players), else `fallback`."""
     streaming = optional("app.modules.streaming.service")
-    if streaming is None:
-        return None
     for name in ("playback_url_for", "active_playback_url"):
         fn = getattr(streaming, name, None)
         if callable(fn):
             url = _guarded(conn, fn, entity_id)
-            if isinstance(url, str) and url:
-                return url
-    if not (club_ids and hasattr(streaming, "active_keys") and hasattr(streaming, "playback_url")):
-        return None
-    players = [r["player_id"] for r in conn.execute(
-        "SELECT player_id FROM players WHERE club_id = ANY(%s) ORDER BY player_id", (list(club_ids),)).fetchall()]
-    keys = _guarded(conn, _active_keys, players) or {}
-    for player_id in players:
-        if player_id in keys:
-            return streaming.playback_url(keys[player_id])
-    return None
+            return url if isinstance(url, str) and url else None
+    if streaming is not None and club_ids and hasattr(streaming, "active_keys") and hasattr(streaming, "playback_url"):
+        players = [r["player_id"] for r in conn.execute(
+            "SELECT player_id FROM players WHERE club_id = ANY(%s) ORDER BY player_id", (list(club_ids),)).fetchall()]
+        keys = _guarded(conn, _active_keys, players) or {}
+        for player_id in players:
+            if player_id in keys:
+                return streaming.playback_url(keys[player_id])
+    return fallback
 
 
 def match_overlay(conn, match_id: str) -> dict | None:
@@ -162,8 +159,8 @@ def costream_overlay(conn, session_id: str) -> dict:
         "active_participants": participants,
         "participant_names": names,
         "layout": (session or {}).get("layout"),
-        "playback_url": (session or {}).get("composite_playback_url")
-        if (session or {}).get("status") != "terminated" else None,
+        "playback_url": playback_url(conn, session_id, fallback=(session or {}).get("composite_playback_url")
+                                     if (session or {}).get("status") != "terminated" else None),
         "chat_room_id": (session or {}).get("chat_room_id") or f"chat-{session_id}",
         "match": match,
         "pinned_product": match["pinned_product"] if match else pinned_product(conn, None),

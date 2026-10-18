@@ -346,6 +346,75 @@ def test_match_video_comes_from_a_club_players_live_key(fresh, monkeypatch):
     assert o["playback_url"] == "http://localhost:8888/live/key-a2/index.m3u8"
 
 
+def _fake_modules(monkeypatch, streaming=None, costream=None):
+    real = web.optional
+
+    def pick(path):
+        if path.endswith("streaming.service"):
+            return streaming
+        if path.endswith("costream.service"):
+            return costream
+        return real(path)
+    monkeypatch.setattr(web, "optional", pick)
+
+
+class LiveKeys:
+    """A streaming build without playback_url_for: player keys only."""
+    @staticmethod
+    def active_keys(conn, player_ids):
+        return {p: f"key-{p}" for p in player_ids}
+
+    @staticmethod
+    def playback_url(key):
+        return f"http://localhost:8888/live/{key}/index.m3u8"
+
+
+def test_playback_url_for_is_final_when_streaming_offers_it(fresh, monkeypatch):
+    asked = []
+
+    class Streaming(LiveKeys):
+        @staticmethod
+        def playback_url_for(conn, entity_id):
+            asked.append(entity_id)
+            return None
+
+    _fake_modules(monkeypatch, streaming=Streaming)
+    assert fresh.get("/web/api/matches/match-m1/overlay").json()["playback_url"] is None
+    assert asked == ["match-m1"]
+
+    class Publishing(LiveKeys):
+        @staticmethod
+        def playback_url_for(conn, entity_id):
+            return f"http://localhost:8888/live/now-{entity_id}/index.m3u8"
+
+    _fake_modules(monkeypatch, streaming=Publishing)
+    assert fresh.get("/web/api/matches/match-m1/overlay").json()["playback_url"].endswith("/live/now-match-m1/index.m3u8")
+    cs = fresh.get("/web/api/costream/cs-session-101").json()
+    assert cs["playback_url"].endswith("/live/now-cs-session-101/index.m3u8")
+
+
+def test_costream_falls_back_to_the_composite_url_unless_terminated(fresh, monkeypatch):
+    session = {"session_id": "cs-session-101", "status": "active", "active_host": "player-alpha-2",
+               "active_participants": ["player-alpha-2", "player-beta-1"], "layout": "grid_2",
+               "composite_playback_url": "http://localhost:8888/costream/cs-session-101/index.m3u8",
+               "chat_room_id": "chat-cs-session-101"}
+
+    class Costream:
+        @staticmethod
+        def get_session(conn, session_id):
+            return dict(session) if session_id == "cs-session-101" else None
+
+    _fake_modules(monkeypatch, costream=Costream)
+    o = fresh.get("/web/api/costream/cs-session-101").json()
+    assert o["exists"] is True and o["playback_url"] == session["composite_playback_url"]
+    assert o["active_host"] == "player-alpha-2" and o["layout"] == "grid_2"
+    assert o["participant_names"]["player-alpha-2"]
+    page = fresh.get("/web/costream/cs-session-101").text
+    assert "(host)" in page and 'id="layout-chip">grid_2<' in page
+    session["status"] = "terminated"
+    assert fresh.get("/web/api/costream/cs-session-101").json()["playback_url"] is None
+
+
 # ---------------------------------------------------------------------------------------------
 # Accessibility (NFR-8): static checks the Selenium DOM inspection relies on
 # ---------------------------------------------------------------------------------------------

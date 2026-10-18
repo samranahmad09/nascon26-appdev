@@ -134,8 +134,20 @@
       if (match.away && match.away.name && el.awayName) { el.awayName.textContent = match.away.name; }
     }
     if (o.pinned_product) { showProduct(o.pinned_product); }
+    if (boot.kind === 'costream') {
+      showHosts(o);
+      if (o.status === 'terminated') { stopPlayback('This co-stream has ended'); return; }
+      if (!o.playback_url && !currentUrl) { setStream(STAGE_TEXT); }
+    }
     if (o.playback_url && o.playback_url !== currentUrl) { startPlayback(o.playback_url); }
-    if (boot.kind === 'costream') { showHosts(o); }
+  }
+
+  /* Co-stream sessions change hosts, layout and composite URL live (handoff, kicks, termination). */
+  function watchCostream() {
+    if (boot.kind !== 'costream') { return; }
+    liveSocket('/api/v1/ws?topic=' + encodeURIComponent('costream:' + boot.entity_id), 'costream-socket', function (msg) {
+      if (msg.type === 'costream_state' || msg.type === 'costream_update') { refreshOverlay(); }
+    }, refreshOverlay);
   }
 
   function refreshOverlay() {
@@ -204,6 +216,13 @@
       return u.toString();
     } catch (e) { return url; }
   }
+  function stopPlayback(text) {
+    if (hls) { hls.destroy(); hls = null; }
+    if (currentUrl) { el.video.removeAttribute('src'); el.video.load(); }
+    currentUrl = null;
+    setStream(text);
+  }
+
   function startPlayback(url) {
     if (!url) { return; }
     currentUrl = url;
@@ -635,6 +654,7 @@
   if (boot.playback_url) { startPlayback(boot.playback_url); }
   watchMatch(boot.match_id);
   watchChat();
+  watchCostream();
   if (!memberToken()) { guestToken(); }
   /* No stream yet: look for one every few seconds without reloading the page. */
   setInterval(function () { if (!currentUrl || document.body.getAttribute('data-score-socket') !== 'open') { refreshOverlay(); } }, 5000);
