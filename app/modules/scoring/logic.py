@@ -10,11 +10,27 @@ from ...core.signing import canonical
 from ...core.validate import Validator, is_id, is_int
 from ..sports.logic import TIE_BREAK_TOKENS
 
-TYPES = ("match_init", "match_start", "score", "discipline", "tiebreak_winner", "match_end", "compensation")
 TEAM_TYPES = ("score", "discipline", "tiebreak_winner")
 COMPENSABLE = TEAM_TYPES
-EMPTY_PAYLOAD_TYPES = ("match_start", "match_end")
+# Day 2 status transitions (FR-1.3 state machine): event type -> projected status. They are allowed from
+# upcoming or in_progress only; a postponed match can be started again, cancelled / abandoned are final.
+STATUS_EVENTS = {"match_postpone": "postponed", "match_cancel": "cancelled", "match_abandon": "abandoned"}
+# Tolerated spellings. The log keeps the type exactly as sent; the fold and the rules use the canonical one.
+TYPE_ALIASES = {
+    "postpone": "match_postpone", "postponed": "match_postpone", "match_postponed": "match_postpone",
+    "cancel": "match_cancel", "cancelled": "match_cancel", "match_cancelled": "match_cancel",
+    "canceled": "match_cancel", "match_canceled": "match_cancel",
+    "abandon": "match_abandon", "abandoned": "match_abandon", "match_abandoned": "match_abandon",
+}
+TYPES = ("match_init", "match_start", "score", "discipline", "tiebreak_winner", "match_end", "compensation",
+         *STATUS_EVENTS, *TYPE_ALIASES)
+EMPTY_PAYLOAD_TYPES = ("match_start", "match_end", *STATUS_EVENTS, *TYPE_ALIASES)
+RESTARTABLE = ("upcoming", "postponed")
 DEFAULT_POINTS = {"win": 3, "draw": 1, "loss": 0}
+
+
+def canonical_type(kind: str) -> str:
+    return TYPE_ALIASES.get(kind, kind)
 
 
 def dump(obj) -> str:
@@ -108,11 +124,13 @@ def fold(stream: dict, sport: dict, rows: list[dict]) -> dict:
     compensated_by = {r["compensates"]: r["event_id"] for r in rows if r["type"] == "compensation"}
     status, tiebreak = "upcoming", None
     for r in rows:
-        kind = r["type"]
+        kind = canonical_type(r["type"])
         if kind == "match_start":
             status = "in_progress"
         elif kind == "match_end":
             status = "completed"
+        elif kind in STATUS_EVENTS:
+            status = STATUS_EVENTS[kind]
         elif kind in COMPENSABLE and r["event_id"] not in compensated_by:
             p = r["payload"]
             side = sides.get(p.get("team_id"))
@@ -139,7 +157,7 @@ def fold(stream: dict, sport: dict, rows: list[dict]) -> dict:
     else:
         winner = tiebreak
     if status != "completed":
-        outcome = "pending"
+        outcome = "pending"  # also for postponed / cancelled / abandoned: only a completed match has a result
     elif winner == home_id:
         outcome = "home_win"
     elif winner == away_id:
@@ -217,7 +235,7 @@ def _limit_reached(sport: dict, state: dict, team_id: str) -> ApiError | None:
 
 def check_append(event: dict, stream: dict, sport: dict, state: dict) -> None:
     """400 (team / event type) then 409 (state machine, config limits) for an existing stream."""
-    kind, p, match_id = event["type"], event["payload"], event["match_id"]
+    kind, p, match_id = canonical_type(event["type"]), event["payload"], event["match_id"]
     if kind in TEAM_TYPES:
         if p["team_id"] not in (stream["home_team_id"], stream["away_team_id"]):
             raise validation_error(["payload.team_id"], "team_id must be the home or away team of the match.")
@@ -227,8 +245,12 @@ def check_append(event: dict, stream: dict, sport: dict, state: dict) -> None:
                            {"event_type": p["event_type"], "sport_id": sport["sport_id"]})
     status = state["status"]
     if kind == "match_start":
-        if status != "upcoming":
+        if status not in RESTARTABLE:
             raise conflict("ILLEGAL_TRANSITION", f"Cannot start a match that is {status}.",
+                           {"match_id": match_id, "status": status})
+    elif kind in STATUS_EVENTS:
+        if status not in ("upcoming", "in_progress"):
+            raise conflict("ILLEGAL_TRANSITION", f"Cannot move a match that is {status} to {STATUS_EVENTS[kind]}.",
                            {"match_id": match_id, "status": status})
     elif kind == "match_end":
         if status != "in_progress":
