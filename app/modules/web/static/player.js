@@ -378,7 +378,12 @@
     return addToGuestCart(variantId, 1, false).then(function (res) {
       if (res.error || !memberToken() || !res.token) { return res; }
       return mergeInto(memberToken(), res.token).then(function (merged) {
-        return merged === null ? res : { count: merged };
+        if (merged.count !== null) { return { count: merged.count }; }
+        /* The item stays staged; the badge keeps showing what the account cart really holds. */
+        return memberCartCount().then(function (c) {
+          return { count: c, error: merged.code === 'OUT_OF_STOCK' ? 'Your cart already holds all the stock of that size.' :
+            'Could not add this item to your account cart.' };
+        });
       });
     });
   }
@@ -401,7 +406,11 @@
       el.add.disabled = true;
       el.cartNote.textContent = 'Adding to your cart...';
       addToCart(variantId).then(function (res) {
-        if (res.error) { el.cartNote.textContent = res.error; return; }
+        if (res.error) {
+          el.cartNote.textContent = res.error;
+          if (res.count !== null && res.count !== undefined) { setCount(res.count); }
+          return;
+        }
         setCount(res.count);
         el.cartNote.textContent = 'Added to your cart.';
       }).then(function () { el.add.disabled = false; }, function () { el.add.disabled = false; });
@@ -546,10 +555,14 @@
     return pushLocal.then(function () {
       return api('POST', '/api/v1/guest/merge', { guest_token: tok }, member);
     }).then(function (r) {
-      if (!r.ok) { return null; }
-      store.del(KEYS.local);
-      dropGuestToken();
-      return countOf(r.data);
+      if (r.ok) {
+        store.del(KEYS.local);
+        dropGuestToken();
+        return { count: countOf(r.data), code: null };
+      }
+      var code = errorCode(r) || 'MERGE_FAILED';
+      if (code === 'GUEST_TOKEN_NOT_FOUND' || code === 'GUEST_TOKEN_ALREADY_MERGED') { dropGuestToken(); }
+      return { count: null, code: code };
     });
   }
 
@@ -559,8 +572,9 @@
 
   function afterLogin() {
     var guest = store.get(KEYS.guest);
-    var merged = (guest ? mergeInto(memberToken(), guest) : Promise.resolve(null)).then(function (count) {
-      return count === null ? memberCartCount() : count;
+    var merged = (guest ? mergeInto(memberToken(), guest) : Promise.resolve({ count: null })).then(function (m) {
+      if (m.code === 'OUT_OF_STOCK') { el.cartNote.textContent = 'Some items stayed in your guest cart: not enough stock.'; }
+      return m.count === null ? memberCartCount() : m.count;
     });
     return merged.then(function (count) {
       if (count !== null && count !== undefined) { setCount(count); }
