@@ -18,7 +18,7 @@ router = APIRouter()
 
 # Browsers that cannot reach the media server's own port (Selenium Grid nodes, phones behind the venue Wi-Fi) play
 # HLS through this origin instead: /web/hls/live/{key}/... is fetched from the media server's HLS port.
-MEDIA_HLS = f"http://{os.environ.get('MEDIA_HOST', 'media')}:8888"
+MEDIA_HLS = f"http://{os.environ.get('MEDIA_HOST') or 'media'}:8888"
 HLS_PATH = re.compile(r"(live|costream)/[A-Za-z0-9_.\-]{1,128}/[A-Za-z0-9_.\-]{1,128}\.(m3u8|ts|mp4|m4s)")
 HLS_TYPES = {"m3u8": "application/vnd.apple.mpegurl", "ts": "video/mp2t", "mp4": "video/mp4", "m4s": "video/iso.segment"}
 _hls_client: httpx.AsyncClient | None = None
