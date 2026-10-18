@@ -52,22 +52,22 @@ services:
       - miniodata:/bitnami/minio/data
 
   media:
-    image: bluenviron/mediamtx:1.9.1
+    # -ffmpeg variant: same MediaMTX build plus ffmpeg (co-stream composites) and busybox for the healthcheck.
+    image: bluenviron/mediamtx:1.9.1-ffmpeg
     # Publish/read authorised by the API (/internal/media/auth); control API on :9997 inside the network only.
     volumes:
       - ./media/mediamtx.yml:/mediamtx.yml:ro
+      - ./media/costream.sh:/costream.sh:ro
     ports:
       - "1935:1935"
       - "8888:8888"
       - "8889:8889"
       - "8189:8189/udp"
     healthcheck:
-      # The image is FROM scratch (no shell or HTTP client), so this is a liveness check of the binary;
-      # the API probes real readiness through the control API (streaming.service.media_ready()).
-      test: ["CMD", "/mediamtx", "--version"]
-      interval: 10s
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9997/v3/paths/list || exit 1"]
+      interval: 5s
       timeout: 3s
-      retries: 3
+      retries: 30
     restart: unless-stopped
 
   api:
