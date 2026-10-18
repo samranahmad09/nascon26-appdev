@@ -14,6 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from grid import BASE_URL, api, raw_redirect
 
 LIVE_PATH = "/web/matches/match-m1/live"
+COSTREAM_PATH = "/web/costream/cs-session-101"
 # Demo member seeded by /audit/v1/reset (app/core/seed_data.json); override for other environments.
 MEMBER_EMAIL = os.environ.get("MEMBER_EMAIL", "viewer@nascon.test")
 MEMBER_PASSWORD = os.environ.get("MEMBER_PASSWORD", "Nascon@26")
@@ -63,15 +64,15 @@ def test_2_guest_chat_send_is_blocked_and_opens_auth_modal(driver, live_match):
     field = wait.until(EC.element_to_be_clickable(tid("chat-input-field")))
     assert not driver.find_element(*tid("progressive-auth-modal")).is_displayed()
     chat = driver.find_element(*tid("chat-message-list"))
-    before = len(chat.find_elements(By.CSS_SELECTOR, "li"))
 
+    # A unique text: other sessions may chat in this room meanwhile, so look for this message, not a count.
     text = f"Guest cheer {uuid.uuid4().hex[:8]}"
     field.send_keys(text)
     driver.find_element(*tid("chat-send-btn")).click()
 
     wait.until(EC.visibility_of_element_located(tid("progressive-auth-modal")))
     time.sleep(1.0)  # leave room for a late (wrong) append before checking the list
-    assert len(chat.find_elements(By.CSS_SELECTOR, "li")) == before
+    assert not [li for li in chat.find_elements(By.CSS_SELECTOR, "li") if text in li.text]
     assert text not in chat.text
 
     # The block is server-side: the same write from this guest tab is refused with 403.
@@ -118,8 +119,13 @@ def test_3_guest_cart_and_realtime_score(driver, live_match):
 
 
 def test_5_login_from_the_modal_merges_the_cart_and_sends_the_chat(driver, live_match):
-    """FR-4.4: logging in from the progressive modal keeps the staged cart and completes the blocked write."""
-    wait = open_live(driver)
+    """FR-4.4 on the co-stream page (its own chat room, so the member message never reaches test 2's page):
+    logging in from the progressive modal keeps the staged cart and completes the blocked write."""
+    driver.get(BASE_URL + COSTREAM_PATH)
+    wait = WebDriverWait(driver, 10)
+    found = driver.execute_script(
+        "return Array.from(document.querySelectorAll('[data-testid]')).map(e => e.getAttribute('data-testid'));")
+    assert sorted(found) == sorted(TESTIDS)
     wait.until(EC.element_to_be_clickable(tid("add-to-guest-cart-btn"))).click()
     count = driver.find_element(*tid("guest-cart-count"))
     WebDriverWait(driver, 5).until(lambda d: count.text.strip() == "1")
