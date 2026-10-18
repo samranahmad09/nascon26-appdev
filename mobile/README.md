@@ -52,14 +52,14 @@ existed. It is off by default (`Settings.useSampleData`) and only ever applies t
 * **Co-Stream (FR-3.3)**: `lib/screens/costream_screen.dart`; grid_2 / grid_4 / spotlight / composite views of HLS
   tiles (`lib/ui/video_tile.dart`, placeholder while a participant is not live) and the unified chat
   `chat-{session_id}` (history + `/api/v1/ws?topic=chat:{room}` + `POST /api/v1/chat`).
-* **QR scanner**: `lib/screens/qr_scan_screen.dart` (mobile_scanner). Short URLs `/q/{code}` are resolved by
-  following the server's 302; `nascon://` and `/web/...` URLs map straight to screens.
+* **QR scanner**: `lib/screens/qr_scan_screen.dart` (mobile_scanner: CameraX + ML Kit). Short URLs `/q/{code}`
+  are resolved by following the server's 302; `nascon://` and `/web/...` URLs map straight to screens.
 * **Go live (FR-3.2)**: `lib/screens/creator_screen.dart`: stream key generate / rotate / revoke via
   `POST /audit/v1/stream/key`, RTMP + WHIP ingest URLs, HLS preview, viewer QR. Publishing is done from OBS
   (RTMP or WHIP).
 * **Appium ids**: key widgets carry `Semantics(identifier: ...)`, exposed to UiAutomator as resource-ids:
-  `screen-match-live`, `match-score`, `screen-costream`, `costream-tile-{i}`, `chat-message-list`,
-  `chat-input`, `chat-send`, `screen-qr-scanner`, `screen-creator`, `screen-player`, `login-guest`,
+  `screen-match-live`, `live-score-banner`, `screen-costream`, `costream-tile-{i}`, `chat-message-list`,
+  `chat-input-field`, `chat-send-btn` (same names as the web data-testids), `screen-qr-scanner`, `screen-creator`, `screen-player`, `login-guest`,
   `login-scan-qr`, and `title-{screen-title}` on every app bar title.
 * Media URLs that say `localhost` are rewritten to the configured server host (or kept on 127.0.0.1 with
   `adb reverse tcp:8888 tcp:8888` over USB).

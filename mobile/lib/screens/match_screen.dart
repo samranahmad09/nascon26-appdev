@@ -305,7 +305,7 @@ class ScoreHeader extends StatelessWidget {
           ]),
         );
     return Semantics(
-      identifier: 'match-score',
+      identifier: 'live-score-banner',
       liveRegion: true,
       label: '$hn ${sideScore(home)}, $an ${sideScore(away)}. '
           '${status == 'in_progress' ? 'Live' : status == 'completed' ? 'Full time' : 'Not started'}.',

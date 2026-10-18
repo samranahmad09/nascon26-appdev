@@ -336,10 +336,14 @@ class ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final offline = error is ApiException && (error as ApiException).network;
+    final guestBlocked =
+        !svc.session.loggedIn && error is ApiException && (error as ApiException).status == 401;
     return EmptyState(
       icon: offline ? Icons.cloud_off : Icons.error_outline,
       title: offline ? 'You\'re offline' : 'Couldn\'t load this',
-      message: friendlyAny(error),
+      message: guestBlocked
+          ? 'The server didn\'t give this phone a guest pass for this page. Sign in to view it.'
+          : friendlyAny(error),
       actionLabel: 'Try again',
       onAction: onRetry,
     );

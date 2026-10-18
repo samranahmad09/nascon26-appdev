@@ -379,7 +379,7 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
           child: Row(children: [
             Expanded(
               child: Semantics(
-                identifier: 'chat-input',
+                identifier: 'chat-input-field',
                 child: TextField(
                   controller: _text,
                   minLines: 1,
@@ -395,7 +395,7 @@ class _CoStreamScreenState extends State<CoStreamScreen> {
             ),
             const SizedBox(width: T.s8),
             Semantics(
-              identifier: 'chat-send',
+              identifier: 'chat-send-btn',
               child: IconButton.filled(
                 tooltip: 'Send message',
                 onPressed: _sending ? null : _send,
