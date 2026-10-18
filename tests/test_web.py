@@ -199,6 +199,35 @@ def test_costream_overlay_without_a_session(fresh):
     assert o["pinned_product"]["product_id"] == "prod-jersey-001"
 
 
+def test_chat_history_passes_moderation_backlog_through(fresh, monkeypatch):
+    calls = []
+
+    class Moderation:
+        @staticmethod
+        def list_chat(room, after, limit):
+            calls.append((room, after, limit))
+            return {"chat_room_id": room, "messages": [{"sequence": 1, "text": "***"}]}
+
+    real = web.optional
+    monkeypatch.setattr(web, "optional", lambda path: Moderation if path.endswith("moderation.service") else real(path))
+    r = fresh.get("/web/api/chat/chat-match-m1/messages", params={"after": 3, "limit": 50})
+    assert r.status_code == 200
+    assert r.json() == {"chat_room_id": "chat-match-m1", "messages": [{"sequence": 1, "text": "***"}]}
+    assert calls == [("chat-match-m1", 3, 50)]
+    assert fresh.get("/web/api/chat/chat-match-m1/messages").status_code == 200
+    assert calls[-1] == ("chat-match-m1", None, 100)
+
+
+def test_chat_history_validation_and_missing_module(fresh, monkeypatch):
+    assert fresh.get("/web/api/chat/bad%20room/messages").json()["error"]["details"]["fields"] == ["chat_room_id"]
+    assert fresh.get("/web/api/chat/chat-x/messages", params={"limit": 0}).status_code == 400
+    assert fresh.get("/web/api/chat/chat-x/messages", params={"after": -1}).status_code == 400
+    real = web.optional
+    monkeypatch.setattr(web, "optional", lambda path: None if path.endswith("moderation.service") else real(path))
+    r = fresh.get("/web/api/chat/chat-x/messages")
+    assert r.status_code == 503 and r.json()["error"]["code"] == "CHAT_UNAVAILABLE"
+
+
 def test_player_and_club_api(fresh):
     p = fresh.get("/web/api/players/player-alpha-1").json()
     assert p["name"] == "Ahmed Raza" and p["club_id"] == "club-alpha-1" and p["club_name"] == "Alpha United"

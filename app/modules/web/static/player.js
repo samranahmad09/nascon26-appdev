@@ -6,6 +6,7 @@
 
   var boot = JSON.parse(document.getElementById('boot').textContent);
   var KEYS = { guest: 'nascon.guest_token', member: 'nascon.member_token', name: 'nascon.member_name',
+               uid: 'nascon.member_id',
                count: 'nascon.cart_count', local: 'nascon.local_cart', resume: 'nascon.resume' };
 
   function byId(id) { return document.getElementById(id); }
@@ -432,11 +433,13 @@
     text.className = 'chat-text';
     text.textContent = m.text;
     li.appendChild(who);
+    li.appendChild(document.createTextNode(' '));
     li.appendChild(text);
     if (m.flagged) {
       var flag = document.createElement('span');
       flag.className = 'chat-flag';
       flag.textContent = 'moderated';
+      li.appendChild(document.createTextNode(' '));
       li.appendChild(flag);
     }
     var list = el.chatList;
@@ -459,13 +462,11 @@
     return Array.isArray(data.messages) ? data.messages : [];
   }
 
+  /* Backlog through /web/api (no per-IP limiter); the public /api/v1 route is the fallback. Neither needs a token. */
   function loadHistory() {
-    var path = '/api/v1/chat/' + encodeURIComponent(boot.chat_room_id) + '/messages';
-    var tok = memberToken();
-    var first = tok ? Promise.resolve(tok) : guestToken();
-    return first.then(function (t) { return api('GET', path, undefined, t); }).then(function (r) {
-      if (!r.ok && r.status === 401) { return api('GET', path); }
-      return r;
+    var room = encodeURIComponent(boot.chat_room_id);
+    return api('GET', '/web/api/chat/' + room + '/messages').then(function (r) {
+      return r.ok ? r : api('GET', '/api/v1/chat/' + room + '/messages');
     }).then(function (r) {
       if (r.ok) { messagesOf(r.data).forEach(appendMessage); }
     });
@@ -474,6 +475,10 @@
   function watchChat() {
     liveSocket('/api/v1/ws?topic=' + encodeURIComponent('chat:' + boot.chat_room_id), 'chat-socket', function (msg) {
       if (msg.type === 'chat_message') { appendMessage(msg.message); }
+      else if (msg.type === 'moderation' && msg.user && msg.user === store.get(KEYS.uid)) {
+        el.chatNote.textContent = msg.action === 'kick' ? 'Moderation removed you from this chat.' :
+          'Moderation muted you for a few seconds.';
+      }
     }, loadHistory);
   }
 
@@ -586,6 +591,7 @@
         store.set(KEYS.member, r.data.token);
         var user = r.data.user || {};
         store.set(KEYS.name, user.display_name || user.email || email);
+        store.set(KEYS.uid, user.user_id || '');
         el.password.value = '';
         return afterLogin();
       }).then(function () { el.authSubmit.disabled = false; }, function () { el.authSubmit.disabled = false; });

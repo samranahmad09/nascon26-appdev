@@ -7,11 +7,11 @@ import re
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from ...core import db
-from ...core.errors import ApiError, not_found
+from ...core.errors import ApiError, not_found, validation_error
 from . import pages, service
 
 router = APIRouter()
@@ -22,6 +22,7 @@ MEDIA_HLS = f"http://{os.environ.get('MEDIA_HOST', 'media')}:8888"
 HLS_PATH = re.compile(r"(live|costream)/[A-Za-z0-9_.\-]{1,128}/[A-Za-z0-9_.\-]{1,128}\.(m3u8|ts|mp4|m4s)")
 HLS_TYPES = {"m3u8": "application/vnd.apple.mpegurl", "ts": "video/mp2t", "mp4": "video/mp4", "m4s": "video/iso.segment"}
 _hls_client: httpx.AsyncClient | None = None
+CHAT_ROOM = re.compile(r"[A-Za-z0-9_.:\-]{1,128}")
 
 STATIC_DIR = Path(__file__).with_name("static")
 MEDIA_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -81,6 +82,17 @@ def match_overlay(match_id: str):
 def costream_overlay(session_id: str):
     with db.tx() as conn:
         return _json(service.costream_overlay(conn, session_id))
+
+
+@router.get("/web/api/chat/{room}/messages")
+def chat_history(room: str, after: int | None = Query(None, ge=0), limit: int = Query(100, ge=1, le=500)):
+    """Chat backlog for the page, off the /api/v1 per-IP limiter (a venue Wi-Fi puts every phone on one IP)."""
+    if not CHAT_ROOM.fullmatch(room):
+        raise validation_error(["chat_room_id"])
+    moderation = service.optional("app.modules.moderation.service")
+    if moderation is None or not hasattr(moderation, "list_chat"):
+        raise ApiError(503, "CHAT_UNAVAILABLE", "Chat history is not available.")
+    return _json(moderation.list_chat(room, after, limit))
 
 
 @router.get("/web/api/players/{player_id}")
